@@ -1,0 +1,12 @@
+# Example prover inputs for testing
+# A user proving their $5,000/month income exceeds the $3,000 threshold
+
+# Private inputs (witness — never revealed)
+monthly_income = "5000"
+data_source_secret = "42"
+
+# Public inputs (visible to verifier)
+minimum_threshold = "3000"
+attestation_type = "1"
+timestamp = "1750000000"
+data_commitment = "" # Will be computed from poseidon::bn254::hash_2([42, 5000])

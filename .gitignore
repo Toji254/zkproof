@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+/frontend/node_modules/
+/frontend/dist/
+
+# Rust/Soroban Build Artifacts
+/target/
+/contracts/target/
+Cargo.lock
+
+# Noir ZK Circuit compiler outputs
+/circuits/target/
+/circuits/Proof.vkey
+/circuits/proofs/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Keep contract identifier files tracked
+!.contract-id
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+Thumbs.db
