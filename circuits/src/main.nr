@@ -14,7 +14,7 @@
 //   - timestamp: when the proof was generated (unix timestamp)
 //   - data_commitment: Poseidon hash binding the income to its source
 
-use std::hash::poseidon;
+use poseidon::poseidon::bn254;
 
 fn main(
     // ===== PRIVATE INPUTS (the "witness" — never revealed) =====
@@ -72,7 +72,7 @@ fn main(
     // 
     // In practice, this commitment would be created by a trusted data
     // provider (bank API, payroll service, etc.) and shared with the user.
-    let computed_commitment = poseidon::bn254::hash_2([
+    let computed_commitment = bn254::hash_2([
         data_source_secret,
         monthly_income
     ]);
@@ -92,7 +92,7 @@ fn test_valid_income_proof() {
     let ts = 1750000000; // ~June 2025
 
     // Compute the expected commitment
-    let commitment = poseidon::bn254::hash_2([secret, income]);
+    let commitment = bn254::hash_2([secret, income]);
 
     // This should pass — income (5000) > threshold (3000)
     main(income, secret, threshold, att_type, ts, commitment);
@@ -106,7 +106,7 @@ fn test_insufficient_income() {
     let att_type = 1;
     let ts = 1750000000;
 
-    let commitment = poseidon::bn254::hash_2([secret, income]);
+    let commitment = bn254::hash_2([secret, income]);
 
     // This should FAIL — income (2000) < threshold (3000)
     main(income, secret, threshold, att_type, ts, commitment);
@@ -122,7 +122,7 @@ fn test_fabricated_income() {
     let ts = 1750000000;
 
     // Commitment is for real_income, but we pass fake_income
-    let commitment = poseidon::bn254::hash_2([secret, real_income]);
+    let commitment = bn254::hash_2([secret, real_income]);
 
     // This should FAIL — commitment doesn't match fake income
     main(fake_income, secret, threshold, att_type, ts, commitment);

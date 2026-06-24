@@ -1,6 +1,6 @@
 [package]
 name = "zkproof-contract"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
@@ -8,10 +8,17 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = { version = "26.0.1", default-features = false, features = ["alloc"] }
+ultrahonk_soroban_verifier = { git = "https://github.com/NethermindEth/rs-soroban-ultrahonk", branch = "main", default-features = false }
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = { version = "26.0.1", features = ["testutils", "alloc"] }
+
+# The bb.js prover produces a fixed-size 14,592-byte UltraHonk proof
+# (Barretenberg v0.87.0 layout). 4 x 32-byte public inputs are passed
+# separately and concatenated to the proof's pairing-point object during
+# on-chain verification.
+# (Constants live in src/lib.rs; these comments are not part of Cargo.toml.)
 
 [profile.release]
 opt-level = "z"

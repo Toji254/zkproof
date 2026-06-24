@@ -1,48 +1,46 @@
 #!/bin/bash
-set -e
+# Build the Noir circuit and the Soroban contract WASM.
+# Idempotent: rebuilds are incremental.
+set -euo pipefail
 
-# Find the root directory of the project
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+NARGO="/home/lowkey/.nargo/bin/nargo"
 
-echo "============================================="
-echo "🔨 Building zkProof components"
-echo "============================================="
+export PATH="/home/lowkey/.cargo/bin:/home/lowkey/.nargo/bin:$PATH"
 
-# 1. Build Noir circuit
-echo "Building Noir circuit..."
-if [ -d "$ROOT_DIR/circuits" ]; then
-  cd "$ROOT_DIR/circuits"
-  if nargo compile; then
-    echo "✅ Noir circuit compiled successfully!"
-  else
-    echo "❌ Noir circuit compilation failed."
-    exit 1
-  fi
-else
-  echo "⚠️  'circuits' directory not found, skipping."
+if ! command -v "$NARGO" >/dev/null 2>&1; then
+  echo "nargo not found at $NARGO. Install with: curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash && noirup"
+  exit 1
 fi
 
-# 2. Build Soroban contract
-echo "Building Soroban smart contract..."
-if [ -d "$ROOT_DIR/contracts" ]; then
-  cd "$ROOT_DIR/contracts"
-  # Try using stellar contract build first
-  if command -v stellar &> /dev/null && stellar contract build &> /dev/null; then
-    echo "✅ Soroban contract built successfully via stellar CLI!"
-  else
-    echo "Stellar CLI build failed or not found. Falling back to direct Cargo build..."
-    if cargo build --target wasm32-unknown-unknown --release; then
-      echo "✅ cargo build (wasm32) succeeded!"
-    else
-      echo "❌ Soroban contract build failed."
-      exit 1
-    fi
-  fi
-else
-  echo "⚠️  'contracts' directory not found, skipping."
+# 1. Build circuit
+echo "==> Compiling Noir circuit..."
+(cd "$ROOT_DIR/circuits" && nargo compile)
+if [ ! -f "$ROOT_DIR/circuits/target/zkproof.json" ]; then
+  echo "❌ Circuit compilation failed: target/zkproof.json not produced"
+  exit 1
 fi
+echo "✅ Circuit compiled: $ROOT_DIR/circuits/target/zkproof.json"
 
-echo "============================================="
-echo "🎉 All builds completed successfully!"
-echo "============================================="
+# 2. Run circuit tests
+echo "==> Running circuit tests..."
+(cd "$ROOT_DIR/circuits" && nargo test) | tail -10
+
+# 3. Copy circuit artifact to frontend public dir
+mkdir -p "$ROOT_DIR/frontend/public"
+cp -f "$ROOT_DIR/circuits/target/zkproof.json" "$ROOT_DIR/frontend/public/zkproof.json"
+echo "✅ Copied circuit to frontend/public/zkproof.json"
+
+# 4. Build contract
+echo "==> Building Soroban contract WASM..."
+(cd "$ROOT_DIR/contracts" && cargo build --target wasm32v1-none --release)
+WASM="$ROOT_DIR/contracts/target/wasm32v1-none/release/zkproof_contract.wasm"
+if [ ! -f "$WASM" ]; then
+  echo "❌ Contract build failed: WASM not found at $WASM"
+  exit 1
+fi
+echo "✅ Contract WASM: $WASM ($(du -h "$WASM" | cut -f1))"
+
+echo
+echo "Build complete."

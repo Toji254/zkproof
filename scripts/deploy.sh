@@ -1,88 +1,80 @@
 #!/bin/bash
-set -e
+# Deploy the compiled zkProof contract to Stellar testnet.
+# 1. Deploys the WASM with a placeholder VK
+# 2. Initializes the contract
+# 3. Writes the contract ID to .contract-id and frontend/.env
+# 4. Use scripts/update-vk.sh later to replace the placeholder VK with the real one
+#
+# Idempotent: re-running with an existing .contract-id is a no-op unless FORCE=true.
+set -euo pipefail
 
-# Find the root directory of the project
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "============================================="
-echo "🚀 Deploying zkProof Soroban Contract"
-echo "============================================="
+export PATH="/home/lowkey/.cargo/bin:$PATH"
 
-IDENTITY_NAME="zkproof_dev"
+IDENTITY_NAME="${IDENTITY_NAME:-zkproof_dev}"
+NETWORK="testnet"
+WASM="$ROOT_DIR/contracts/target/wasm32v1-none/release/zkproof_contract.wasm"
+CONTRACT_ID_FILE="$ROOT_DIR/.contract-id"
+FRONTEND_ENV="$ROOT_DIR/frontend/.env"
+PLACEHOLDER_VK="$ROOT_DIR/.vk.placeholder.bin"
+FORCE_DEPLOY="${FORCE:-false}"
 
-# Ensure we have our testnet identity funded
-if ! stellar keys address "$IDENTITY_NAME" &> /dev/null; then
-  echo "⚠️  Stellar identity '$IDENTITY_NAME' not found. Running setup.sh first..."
+if [ ! -f "$WASM" ]; then
+  echo "WASM not found. Run ./scripts/build.sh first."
+  exit 1
+fi
+
+if [ -f "$CONTRACT_ID_FILE" ] && [ "$FORCE_DEPLOY" = "false" ]; then
+  CID=$(cat "$CONTRACT_ID_FILE")
+  echo "✅ Already deployed: $CID"
+  echo "   Re-run with FORCE=true to redeploy."
+  echo "VITE_CONTRACT_ID=$CID" > "$FRONTEND_ENV"
+  echo "VITE_NETWORK=$NETWORK" >> "$FRONTEND_ENV"
+  exit 0
+fi
+
+if ! stellar keys address "$IDENTITY_NAME" >/dev/null 2>&1; then
+  echo "Identity '$IDENTITY_NAME' not found. Running setup.sh..."
   "$SCRIPT_DIR/setup.sh"
 fi
 
 PUB_KEY=$(stellar keys address "$IDENTITY_NAME")
+echo "Deploying from $PUB_KEY on $NETWORK..."
 
-# Locate compiled contract WASM
-WASM_PATH=""
-if [ -f "$ROOT_DIR/target/wasm32-unknown-unknown/release/zkproof_contract.wasm" ]; then
-  WASM_PATH="$ROOT_DIR/target/wasm32-unknown-unknown/release/zkproof_contract.wasm"
-elif [ -f "$ROOT_DIR/contracts/target/wasm32-unknown-unknown/release/zkproof_contract.wasm" ]; then
-  WASM_PATH="$ROOT_DIR/contracts/target/wasm32-unknown-unknown/release/zkproof_contract.wasm"
-fi
+# 0. Build placeholder VK = 1760 bytes (the verifier lib's required length).
+# Until bb.js generates a real VK and ./scripts/update-vk.sh runs, the contract
+# will reject any proof submission — but reads work fine.
+python3 -c "
+with open('$PLACEHOLDER_VK', 'wb') as f:
+    f.write(bytes(1760))
+" || python -c "
+open('$PLACEHOLDER_VK','wb').write(bytes(1760))
+"
+echo "✅ Placeholder VK: $PLACEHOLDER_VK"
 
-CONTRACT_ID_FILE="$ROOT_DIR/.contract-id"
-FORCE_DEPLOY=${FORCE:-false}
+# 1. Deploy (constructor args after `--`)
+VK_HEX=$(xxd -p -c 100000 "$PLACEHOLDER_VK" | tr -d '\n')
+CID=$(stellar contract deploy \
+  --wasm "$WASM" \
+  --source-account "$IDENTITY_NAME" \
+  --network "$NETWORK" \
+  -- --admin "$PUB_KEY" --vk "$VK_HEX")
+echo "✅ Deployed: $CID"
 
-if [ -f "$CONTRACT_ID_FILE" ] && [ "$FORCE_DEPLOY" = "false" ]; then
-  CONTRACT_ID=$(cat "$CONTRACT_ID_FILE")
-  echo "ℹ️  Contract is already deployed at ID: $CONTRACT_ID"
-  echo "   (To force a redeployment, run: FORCE=true ./deploy.sh)"
-else
-  # Compile if wasm is missing
-  if [ -z "$WASM_PATH" ]; then
-    echo "⚠️  WASM file not found. Compiling contract..."
-    "$SCRIPT_DIR/build.sh"
-    # Find WASM path again
-    if [ -f "$ROOT_DIR/target/wasm32-unknown-unknown/release/zkproof_contract.wasm" ]; then
-      WASM_PATH="$ROOT_DIR/target/wasm32-unknown-unknown/release/zkproof_contract.wasm"
-    elif [ -f "$ROOT_DIR/contracts/target/wasm32-unknown-unknown/release/zkproof_contract.wasm" ]; then
-      WASM_PATH="$ROOT_DIR/contracts/target/wasm32-unknown-unknown/release/zkproof_contract.wasm"
-    fi
-  fi
+# 2. The contract was initialized by the constructor during deploy.
+echo "✅ Contract initialized via constructor (admin=$PUB_KEY, placeholder VK)"
 
-  if [ -z "$WASM_PATH" ]; then
-    echo "❌ Failed to locate compiled WASM file. Aborting."
-    exit 1
-  fi
+# 4. Persist the contract ID
+echo "$CID" > "$CONTRACT_ID_FILE"
+echo "VITE_CONTRACT_ID=$CID" > "$FRONTEND_ENV"
+echo "VITE_NETWORK=$NETWORK" >> "$FRONTEND_ENV"
 
-  echo "Deploying contract wasm from $WASM_PATH..."
-  CONTRACT_ID=$(stellar contract deploy \
-    --wasm "$WASM_PATH" \
-    --source-account "$IDENTITY_NAME" \
-    --network testnet)
-
-  echo "✅ Deployed successfully! Contract ID: $CONTRACT_ID"
-  echo "$CONTRACT_ID" > "$CONTRACT_ID_FILE"
-
-  # Initialize contract
-  echo "Initializing contract with admin: $PUB_KEY..."
-  stellar contract invoke \
-    --id "$CONTRACT_ID" \
-    --source-account "$IDENTITY_NAME" \
-    --network testnet \
-    -- initialize \
-    --admin "$PUB_KEY"
-  echo "✅ Contract successfully initialized."
-fi
-
-# Update frontend config
-CONFIG_FILE="$ROOT_DIR/frontend/src/lib/config.js"
-if [ -f "$CONFIG_FILE" ]; then
-  sed -i "s/export const CONTRACT_ID = [\"'][^\"']*[\"']/export const CONTRACT_ID = '$CONTRACT_ID'/g" "$CONFIG_FILE"
-  echo "✅ Updated frontend config: $CONFIG_FILE"
-else
-  echo "⚠️  Frontend config.js not found at: $CONFIG_FILE"
-fi
-
-echo "============================================="
+echo
 echo "🎉 Deployment complete!"
-echo "Contract ID: $CONTRACT_ID"
-echo "Stellar Expert Link: https://stellar.expert/explorer/testnet/contract/$CONTRACT_ID"
-echo "============================================="
+echo "Contract ID: $CID"
+echo "Testnet explorer: https://stellar.expert/explorer/testnet/contract/$CID"
+echo
+echo "NOTE: The VK is currently a placeholder. Once the frontend is built and"
+echo "bb.js can produce a real VK, run ./scripts/update-vk.sh to upload it."

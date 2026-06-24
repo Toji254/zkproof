@@ -1,36 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const TOUR_STORAGE_KEY = 'zkproof_tour_completed';
 
-export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
-  const [activeStep, setActiveStep] = useState(-1);
-  const [autoPlay, setAutoPlay] = useState(false);
-  const [tooltipStyle, setTooltipStyle] = useState({});
-  const [highlightStyle, setHighlightStyle] = useState({});
+interface TourStep {
+  title: string;
+  description: string;
+  targetId: string | null;
+  path: string;
+  action?: (walletAddress?: string) => void;
+}
 
-  const STEPS = [
+interface DemoTourProps {
+  walletAddress: string;
+}
+
+export default function DemoTour({ walletAddress }: DemoTourProps) {
+  const [activeStep, setActiveStep] = useState<number>(-1);
+  const [autoPlay, setAutoPlay] = useState<boolean>(false);
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
+  const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({});
+  const navigate = useNavigate();
+
+  const STEPS: TourStep[] = [
     {
       title: "👋 Welcome to zkProof!",
       description: "This interactive tour will guide you through proving and verifying financial eligibility on-chain using Zero-Knowledge proofs and Soroban smart contracts.",
       targetId: null,
-      view: 'landing',
+      path: '/',
     },
     {
       title: "🔗 Connect Your Wallet",
-      description: "First, connect your Stellar Freighter wallet. If you don't have it, the application will automatically run in Demo Mode with a mock wallet address.",
+      description: "First, connect your Stellar wallet. You can choose Freighter, Lobstr, xBull, Albedo, Hana, and others using the connection modal.",
       targetId: "#connect-wallet-btn",
-      view: 'landing',
+      path: '/',
     },
     {
       title: "✍️ Enter Private Income Data",
       description: "Enter your private income. This sensitive value is processed entirely in your browser to compute a Poseidon commitment—it is never exposed to any server or blockchain.",
       targetId: "#income-input",
-      view: 'prove',
+      path: '/facility/enter-data',
       action: () => {
-        const incomeInput = document.querySelector("#income-input");
+        const incomeInput = document.querySelector("#income-input") as HTMLInputElement;
         if (incomeInput) {
           incomeInput.value = "5000";
-          const tracker = incomeInput._valueTracker;
+          const tracker = (incomeInput as any)._valueTracker;
           if (tracker) tracker.setValue("");
           incomeInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -40,12 +54,12 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
       title: "🎯 Set Proven Threshold",
       description: "Specify the minimum threshold you wish to prove (e.g. $3,000). The ZK proof will verify that your income exceeds this amount, while keeping the exact value hidden.",
       targetId: "#threshold-input",
-      view: 'prove',
+      path: '/facility/generate-proof',
       action: () => {
-        const thresholdInput = document.querySelector("#threshold-input");
+        const thresholdInput = document.querySelector("#threshold-input") as HTMLInputElement;
         if (thresholdInput) {
           thresholdInput.value = "3000";
-          const tracker = thresholdInput._valueTracker;
+          const tracker = (thresholdInput as any)._valueTracker;
           if (tracker) tracker.setValue("");
           thresholdInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -55,24 +69,24 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
       title: "🔐 Generate ZK Proof & Attest",
       description: "Click this button to compile the witness locally in your browser, generate the UltraHonk ZK proof, and submit the attestation to our Soroban smart contract.",
       targetId: "#generate-proof-btn",
-      view: 'prove',
+      path: '/facility/generate-proof',
     },
     {
       title: "🔍 Switch to Verifier View",
       description: "Let's switch to the Verifier view. In this screen, third-parties (e.g., landlords, lenders) can verify your proof credentials on-chain.",
       targetId: "#verify-nav-btn",
-      view: 'prove',
+      path: '/facility/generate-proof',
     },
     {
       title: "✅ Verify the Attestation",
       description: "Paste a Stellar address and select the attestation type to check. The smart contract queries the ledger and returns a simple YES or NO—zero private details are leaked.",
       targetId: "#check-attestation-btn",
-      view: 'verify',
+      path: '/facility/verify',
       action: (address) => {
-        const addressInput = document.querySelector("#verify-address-input");
+        const addressInput = document.querySelector("#verify-address-input") as HTMLInputElement;
         if (addressInput) {
           addressInput.value = address || "GDEMO" + Array.from({ length: 51 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[Math.floor(Math.random() * 32)]).join('');
-          const tracker = addressInput._valueTracker;
+          const tracker = (addressInput as any)._valueTracker;
           if (tracker) tracker.setValue("");
           addressInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -83,10 +97,9 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
   useEffect(() => {
     const isCompleted = localStorage.getItem(TOUR_STORAGE_KEY);
     if (!isCompleted) {
-      // Start tour automatically on first visit
       setTimeout(() => {
         setActiveStep(0);
-      }, 1000);
+      }, 1500);
     }
   }, []);
 
@@ -95,11 +108,11 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
     const step = STEPS[activeStep];
 
     // Navigate to the correct view if specified
-    if (step.view) {
-      onNavigate(step.view.toUpperCase());
+    if (step.path) {
+      navigate(step.path);
     }
 
-    let timer;
+    let timer: number;
     let checkCount = 0;
 
     const updatePosition = () => {
@@ -117,12 +130,10 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
 
       const el = document.querySelector(step.targetId);
       if (!el) {
-        // Element may not be rendered yet; retry polling
         checkCount++;
         if (checkCount < 20) {
-          timer = setTimeout(updatePosition, 100);
+          timer = window.setTimeout(updatePosition, 100);
         } else {
-          // Fallback to center if not found
           setTooltipStyle({
             position: 'fixed',
             top: '50%',
@@ -150,7 +161,6 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
       let left = rect.left + window.scrollX + rect.width / 2;
       let transform = 'translateX(-50%)';
 
-      // Keep tooltip visible inside bounds
       if (top + 200 > window.innerHeight + window.scrollY) {
         top = rect.top + window.scrollY - 180;
       }
@@ -170,13 +180,13 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
         zIndex: 9999,
       });
 
-      // Run step action
       if (step.action) {
         step.action(walletAddress);
       }
     };
 
-    updatePosition();
+    // Delay checking position slightly to let page navigation complete
+    timer = window.setTimeout(updatePosition, 150);
 
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition);
@@ -228,20 +238,28 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
         onClick={startTourManually} 
         style={{
           position: 'fixed',
-          bottom: 20,
-          right: 20,
+          bottom: 24,
+          right: 24,
           zIndex: 100,
-          background: 'var(--accent-glow)',
-          border: '1px solid var(--border-accent)',
-          color: 'var(--accent)',
-          padding: '8px 16px',
+          background: 'rgba(0, 212, 170, 0.15)',
+          border: '1px solid rgba(0, 212, 170, 0.25)',
+          color: '#00d4aa',
+          padding: '10px 20px',
           borderRadius: 30,
           fontSize: '0.8rem',
+          fontFamily: "'IBM Plex Mono', monospace",
           cursor: 'pointer',
           boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
           display: 'flex',
           alignItems: 'center',
-          gap: 6
+          gap: 8,
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(0, 212, 170, 0.25)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(0, 212, 170, 0.15)';
         }}
       >
         <span>💡</span> Show Guide Tour
@@ -253,62 +271,114 @@ export default function DemoTour({ onNavigate, VIEWS, walletAddress }) {
 
   return (
     <>
-      {/* Tour overlay/backdrop */}
-      <div className="tour-overlay" onClick={skipTour} />
+      <div 
+        className="tour-overlay" 
+        onClick={skipTour} 
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          zIndex: 9997,
+        }}
+      />
 
-      {/* Target element highlight */}
-      <div className="tour-highlight" style={highlightStyle} />
+      <div 
+        className="tour-highlight" 
+        style={{
+          ...highlightStyle,
+          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.65), 0 0 15px #00d4aa',
+          borderRadius: 6,
+          pointerEvents: 'none',
+          transition: 'all 0.2s ease',
+        }} 
+      />
 
-      {/* Tooltip Card */}
-      <div className="tour-tooltip card" style={tooltipStyle}>
+      <div 
+        className="tour-tooltip glass-card" 
+        style={{
+          ...tooltipStyle,
+          width: '320px',
+          padding: '20px',
+          background: '#0d1620',
+          border: '1px solid #00d4aa',
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.7)',
+          fontFamily: "'IBM Plex Mono', monospace",
+          transition: 'all 0.25s ease',
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 'bold' }}>
+          <span style={{ fontSize: '0.75rem', color: '#00d4aa', fontWeight: 'bold', letterSpacing: '0.05em' }}>
             STEP {activeStep + 1} OF {STEPS.length}
           </span>
           {autoPlay && (
-            <span style={{ fontSize: '0.75rem', background: 'var(--success-glow)', color: 'var(--success)', padding: '2px 8px', borderRadius: 10 }}>
+            <span style={{ fontSize: '0.7rem', background: 'rgba(0, 212, 170, 0.15)', color: '#00d4aa', padding: '2px 8px', borderRadius: 10 }}>
               ▶ Auto-Play
             </span>
           )}
         </div>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: 'var(--text)' }}>
+        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#e8ecf1', fontWeight: 600, textTransform: 'uppercase' }}>
           {currentStepData.title}
         </h4>
-        <p style={{ margin: '0 0 16px 0', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+        <p style={{ margin: '0 0 20px 0', fontSize: '0.8rem', color: '#8899aa', lineHeight: '1.5' }}>
           {currentStepData.description}
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button className="btn btn-ghost" onClick={skipTour} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+          <button 
+            onClick={skipTour} 
+            style={{ 
+              background: 'transparent', 
+              border: 'none', 
+              color: '#556677', 
+              fontSize: '0.75rem', 
+              cursor: 'pointer',
+              textDecoration: 'underline' 
+            }}
+          >
             Skip
           </button>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button 
-              className="btn btn-outline" 
               onClick={handleBack} 
               disabled={activeStep === 0}
-              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+              style={{ 
+                padding: '6px 12px', 
+                fontSize: '0.75rem', 
+                background: 'transparent',
+                border: '1px solid rgba(136, 153, 170, 0.2)',
+                color: activeStep === 0 ? '#556677' : '#8899aa',
+                cursor: activeStep === 0 ? 'not-allowed' : 'pointer'
+              }}
             >
               Back
             </button>
             <button 
-              className="btn btn-primary" 
               onClick={activeStep === STEPS.length - 1 ? handleFinish : handleNext}
-              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+              style={{ 
+                padding: '6px 14px', 
+                fontSize: '0.75rem', 
+                background: '#00d4aa', 
+                border: 'none', 
+                color: '#050a0f', 
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
             >
               {activeStep === STEPS.length - 1 ? 'Finish' : 'Next'}
             </button>
           </div>
         </div>
-        <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginTop: 14, borderTop: '1px solid rgba(136, 153, 170, 0.12)', paddingTop: 10, display: 'flex', justifyContent: 'center' }}>
           <button 
             onClick={() => setAutoPlay(prev => !prev)}
             style={{
               background: 'transparent',
               border: 'none',
-              color: autoPlay ? 'var(--success)' : 'var(--text-muted)',
-              fontSize: '0.75rem',
+              color: autoPlay ? '#00d4aa' : '#556677',
+              fontSize: '0.72rem',
               cursor: 'pointer',
-              textDecoration: 'underline'
+              textDecoration: 'underline',
+              fontFamily: "'IBM Plex Mono', monospace"
             }}
           >
             {autoPlay ? '⏸ Pause Auto-Advance' : '▶ Enable Auto-Play (For Demos)'}

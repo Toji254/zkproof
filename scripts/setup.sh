@@ -1,61 +1,48 @@
 #!/bin/bash
-set -e
+# Generate + fund a Stellar testnet identity for zkProof.
+# Idempotent: re-running after a successful setup is a no-op.
+set -euo pipefail
 
-echo "============================================="
-echo "⚙️  Setting up zkProof development environment"
-echo "============================================="
-
-# Find the root directory of the project
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# 1. Check for required tools
-MISSING_TOOLS=0
+IDENTITY_NAME="${IDENTITY_NAME:-zkproof_dev}"
+NETWORK="testnet"
+FRIENDBOT_URL="https://friendbot.stellar.org"
 
-check_tool() {
-  if ! command -v "$1" &> /dev/null; then
-    echo "❌ $1 is not installed."
-    echo "   👉 $2"
-    MISSING_TOOLS=1
-  else
-    echo "✅ $1 is installed."
-  fi
-}
+# Ensure stellar CLI is on PATH
+export PATH="/home/lowkey/.cargo/bin:$PATH"
 
-check_tool "cargo" "Install Rust and Cargo: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-check_tool "stellar" "Install Stellar CLI: cargo install --locked stellar-cli --features opt"
-check_tool "nargo" "Install Noir / Nargo: curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash; noirup"
-check_tool "node" "Install Node.js: https://nodejs.org/"
-
-if [ $MISSING_TOOLS -ne 0 ]; then
-  echo ""
-  echo "⚠️  Please install the missing tools above and rerun setup.sh."
+if ! command -v stellar >/dev/null 2>&1; then
+  echo "stellar CLI not found on PATH. Install it from"
+  echo "  https://github.com/stellar/stellar-cli/releases"
   exit 1
 fi
 
-# 2. Add Stellar Testnet network if not present
-echo "Adding Stellar Testnet network configuration to CLI..."
-stellar network add --global testnet \
-  --rpc-url "https://soroban-testnet.stellar.org:443" \
-  --network-passphrase "Test SDF Network ; September 2015" 2>/dev/null || true
-
-# 3. Generate keypair if not exists
-IDENTITY_NAME="zkproof_dev"
-echo "Checking Stellar identity '$IDENTITY_NAME'..."
-
-if stellar keys address "$IDENTITY_NAME" &> /dev/null; then
-  PUB_KEY=$(stellar keys address "$IDENTITY_NAME")
-  echo "✅ Identity '$IDENTITY_NAME' already exists."
+# Generate the identity if it doesn't exist
+if stellar keys ls 2>/dev/null | grep -q "$IDENTITY_NAME"; then
+  echo "✅ Identity '$IDENTITY_NAME' already exists"
 else
-  echo "Creating new Stellar identity '$IDENTITY_NAME' and funding it via Friendbot..."
-  stellar keys generate "$IDENTITY_NAME" --network testnet --fund
-  PUB_KEY=$(stellar keys address "$IDENTITY_NAME")
-  echo "✅ Identity '$IDENTITY_NAME' created."
+  echo "Generating new Stellar identity '$IDENTITY_NAME'..."
+  stellar keys generate "$IDENTITY_NAME"
+  echo "✅ Identity created"
 fi
 
-echo "Public Key: $PUB_KEY"
-echo "Stellar Expert Explorer Link: https://stellar.expert/explorer/testnet/account/$PUB_KEY"
+PUB_KEY=$(stellar keys address "$IDENTITY_NAME")
+echo "Public key: $PUB_KEY"
 
-echo "============================================="
-echo "🎉 Setup complete! Ready to build and deploy."
-echo "============================================="
+# Friendbot fund (testnet only)
+echo "Funding account from friendbot..."
+RESP=$(curl -fsS "$FRIENDBOT_URL?addr=$PUB_KEY" 2>&1) || {
+  echo "Friendbot funding failed. Response: $RESP"
+  exit 1
+}
+echo "✅ Funded"
+
+# Brief check
+BAL=$(stellar keys balance "$IDENTITY_NAME" 2>/dev/null || echo "unknown")
+echo "Balance: $BAL"
+
+echo
+echo "Identity '$IDENTITY_NAME' is ready for use."
+echo "Default network: $(stellar network ls 2>/dev/null | head -1 || echo testnet)"
