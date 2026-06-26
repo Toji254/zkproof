@@ -321,9 +321,7 @@ export default function FacilityDetail({
 
       addLog(
         `Public inputs: threshold=${formData.threshold}, type=${zkState.attestationType}, ` +
-          `ts=${result.publicInputs
-            ? Math.floor(Date.now() / 1000)
-            : '?'}, commitment=${result.commitmentHex.slice(0, 18)}…`,
+          `ts=${result.timestamp}, commitment=${result.commitmentHex.slice(0, 18)}…`,
       );
       if (zkState.attestationType === 'balance') {
         addLog(`Balance attestation asset: ${zkState.selectedAssetCode || selectedWalletAsset?.code || 'USD'}.`);
@@ -337,7 +335,7 @@ export default function FacilityDetail({
         publicInputs: [
           formData.threshold,
           zkState.attestationType,
-          String(Math.floor(Date.now() / 1000)),
+          String(result.timestamp),
           result.commitmentHex,
         ],
       }));

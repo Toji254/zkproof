@@ -1,10 +1,10 @@
-// zkProof — Income Range Proof Circuit
+// zkProof - Income Range Proof Circuit
 // 
 // This circuit proves that a user's monthly income exceeds a given threshold
 // WITHOUT revealing the actual income amount. It also verifies a Poseidon
 // commitment to bind the income data to a trusted source, preventing fabrication.
 //
-// Private inputs (witness — never revealed to anyone):
+// Private inputs (witness - never revealed to anyone):
 //   - monthly_income: the user's actual monthly income
 //   - data_source_secret: a secret tied to the data source (bank API key hash, etc.)
 //
@@ -17,7 +17,7 @@
 use poseidon::poseidon::bn254;
 
 fn main(
-    // ===== PRIVATE INPUTS (the "witness" — never revealed) =====
+    // ===== PRIVATE INPUTS (the "witness" - never revealed) =====
     monthly_income: Field,
     data_source_secret: Field,
 
@@ -31,7 +31,7 @@ fn main(
     // CONSTRAINT 1: Income exceeds the minimum threshold
     // -------------------------------------------------------
     // We convert to u64 for safe comparison (Noir fields are prime field elements)
-    // This is the core "load-bearing" ZK assertion — without this,
+    // This is the core "load-bearing" ZK assertion - without this,
     // the verifier would need to see the actual income.
     let income_val = monthly_income as u64;
     let threshold_val = minimum_threshold as u64;
@@ -42,7 +42,7 @@ fn main(
     // CONSTRAINT 2: Income is within a reasonable range
     // -------------------------------------------------------
     // Prevents overflow attacks and ensures the value is sensible
-    // Max monthly income capped at $10,000,000 (10M) — covers any real scenario
+    // Max monthly income capped at $10,000,000 (10M) - covers any real scenario
     assert(income_val < 10_000_000, "Income must be within reasonable range");
 
     // -------------------------------------------------------
@@ -66,7 +66,7 @@ fn main(
     // -------------------------------------------------------
     // CONSTRAINT 6: Data commitment verification (Poseidon hash)
     // -------------------------------------------------------
-    // This proves the income data wasn't fabricated — it must match
+    // This proves the income data wasn't fabricated - it must match
     // a commitment created from the data source secret and the income.
     // The commitment is: Poseidon(data_source_secret, monthly_income)
     // 
@@ -76,7 +76,7 @@ fn main(
         data_source_secret,
         monthly_income
     ]);
-    assert(computed_commitment == data_commitment, "Data commitment mismatch — income data may be fabricated");
+    assert(computed_commitment == data_commitment, "Data commitment mismatch - income data may be fabricated");
 }
 
 // -------------------------------------------------------
@@ -94,7 +94,7 @@ fn test_valid_income_proof() {
     // Compute the expected commitment
     let commitment = bn254::hash_2([secret, income]);
 
-    // This should pass — income (5000) > threshold (3000)
+    // This should pass - income (5000) > threshold (3000)
     main(income, secret, threshold, att_type, ts, commitment);
 }
 
@@ -108,7 +108,7 @@ fn test_insufficient_income() {
 
     let commitment = bn254::hash_2([secret, income]);
 
-    // This should FAIL — income (2000) < threshold (3000)
+    // This should FAIL - income (2000) < threshold (3000)
     main(income, secret, threshold, att_type, ts, commitment);
 }
 
@@ -124,6 +124,6 @@ fn test_fabricated_income() {
     // Commitment is for real_income, but we pass fake_income
     let commitment = bn254::hash_2([secret, real_income]);
 
-    // This should FAIL — commitment doesn't match fake income
+    // This should FAIL - commitment doesn't match fake income
     main(fake_income, secret, threshold, att_type, ts, commitment);
 }

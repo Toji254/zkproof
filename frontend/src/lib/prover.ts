@@ -17,6 +17,9 @@
 // bb.js (~150MB unpacked) and noir_js are dynamically imported on first use
 // so the dev server boots instantly. Subsequent calls reuse the cached module.
 
+import { poseidon2 as poseidonHash2 } from "poseidon-lite";
+import { decompressSync as gunzip } from "fflate";
+
 export interface ProverInputs {
   attestationType: "income" | "balance" | "credit";
   threshold: number; // u64
@@ -31,6 +34,7 @@ export interface ProverOutput {
   commitment: bigint; // the Poseidon commitment as a Field integer
   commitmentHex: string;
   vk: Uint8Array; // 1760-byte on-chain verification key
+  timestamp: number; // unix seconds used inside the proof
   durationMs: number;
 }
 
@@ -71,43 +75,15 @@ async function ensureInit(): Promise<void> {
 /**
  * Compute the Poseidon BN254 commitment the circuit expects.
  *
- * The circuit uses `poseidon::poseidon::bn254::hash_2([secret, value])` from
- * the noir-lang/poseidon crate (v0.3.0). bb.js v0.87.0 exposes the same
- * hash via `BarretenbergSync.poseidon2Hash` — but poseidon (v1) is what the
- * circuit uses, not poseidon2. bb.js v0.87 does NOT export a `poseidonHash`
- * helper, so we execute the circuit itself to derive the commitment.
- *
- * This executes the witness twice (once for the commitment, once for the
- * final proof) but is the only way to guarantee field-arithmetic parity
- * with the circuit. For a small 1-constraint circuit like ours, the
- * overhead is sub-second.
+ * The circuit uses noir-lang/poseidon v0.3.0. The Noir Poseidon oracle server
+ * uses the same `poseidon-lite` implementation for Poseidon v1 hashing, so we
+ * reuse that here to keep Step 01 fast and deterministic.
  */
 async function computePoseidonCommitmentBN254(
   secret: number,
   value: number,
 ): Promise<bigint> {
-  const ts = Math.floor(Date.now() / 1000);
-  // We need the noir context to execute. The Noir constructor only
-  // needs the circuit artifact (no backend).
-  const noir = new noirModule.Noir(circuitArtifact);
-  const { returnValue } = await noir.execute({
-    monthly_income: String(value),
-    data_source_secret: String(secret),
-    minimum_threshold: "0", // doesn't matter for commitment extraction
-    attestation_type: "1",
-    timestamp: String(ts),
-    data_commitment: "0", // dummy; circuit re-derives and asserts
-  });
-  // The returnValue is the commitment field element.
-  if (typeof returnValue === "string") return BigInt(returnValue);
-  if (Array.isArray(returnValue)) {
-    // Some Noir versions return the public inputs as an array
-    return BigInt(returnValue[3] ?? returnValue[0]);
-  }
-  if (returnValue && typeof returnValue === "object") {
-    return BigInt(returnValue[3] ?? returnValue[0] ?? "0");
-  }
-  throw new Error("Unexpected Noir returnValue shape: " + JSON.stringify(returnValue));
+  return poseidonHash2([BigInt(secret), BigInt(value)]);
 }
 
 /**
@@ -117,9 +93,7 @@ export async function generateProof(inputs: ProverInputs): Promise<ProverOutput>
   const t0 = performance.now();
   await ensureInit();
 
-  // 1. Poseidon commitment — execute the circuit with a dummy commitment
-  //    (the circuit re-derives the commitment and asserts it matches the
-  //    public input — so we pass 0 and read it back from the result).
+  // 1. Compute the Poseidon commitment the circuit expects.
   const commitment = await computePoseidonCommitmentBN254(
     inputs.dataSourceSecret,
     inputs.privateValue,
@@ -144,28 +118,33 @@ export async function generateProof(inputs: ProverInputs): Promise<ProverOutput>
     data_commitment: commitment.toString(),
   });
 
-  // 3. Generate the UltraHonk proof
-  const proofData = await ultraHonkBackend.generateProof(witness);
+  // 3. Generate the UltraHonk proof. We bypass UltraHonkBackend.generateProof()
+  // here because it internally re-computes the VK to infer the public-input
+  // count, and VK generation is flaky in our current bb.js environment. The
+  // circuit has a fixed 4 public inputs, so we can split the proof bundle
+  // directly without touching VK generation.
+  const backendAny = ultraHonkBackend as any;
+  await backendAny.instantiate();
+  const proofWithPublicInputs = await backendAny.api.acirProveUltraHonk(
+    backendAny.acirUncompressedBytecode,
+    gunzip(witness),
+  );
+  const { proof: splitProof } = bbModule.splitHonkProof(proofWithPublicInputs, 4);
 
   // 4. Package the 4 public inputs as 32-byte big-endian fields
   const publicInputs = new Uint8Array(128);
-  writeFieldU64(publicInputs, 0, BigInt(inputs.threshold));
-  writeFieldU64(publicInputs, 32, BigInt(attTypeNum));
-  writeFieldU64(publicInputs, 64, BigInt(ts));
-  writeFieldU32(publicInputs, 96, commitment);
+  writeField(publicInputs, 0, BigInt(inputs.threshold));
+  writeField(publicInputs, 32, BigInt(attTypeNum));
+  writeField(publicInputs, 64, BigInt(ts));
+  writeField(publicInputs, 96, commitment);
 
-  // 5. The proof is in proofData.proof (a Uint8Array). Serialize to hex
-  //    for display.
+  // 5. The proof is in splitProof (a Uint8Array). Serialize to hex for display.
   const proofBytes: Uint8Array =
-    proofData.proof instanceof Uint8Array
-      ? proofData.proof
-      : new Uint8Array(proofData.proof);
+    splitProof instanceof Uint8Array ? splitProof : new Uint8Array(splitProof);
 
-  // 6. Lazily compute the on-chain VK the first time it's needed. The VK is
-  //    1760 bytes (the exact format the Soroban verifier expects).
-  if (!cachedVK) {
-    cachedVK = await ultraHonkBackend.getVerificationKey();
-  }
+  // 6. We do not need the VK for normal browser proving; the UI only needs the
+  //    proof bytes + public inputs. VK extraction remains available through the
+  //    dedicated getVerificationKey() helper for deploy/ops workflows.
 
   return {
     publicInputs,
@@ -173,7 +152,8 @@ export async function generateProof(inputs: ProverInputs): Promise<ProverOutput>
     proofHex: "0x" + bytesToHex(proofBytes),
     commitment,
     commitmentHex: "0x" + commitment.toString(16).padStart(64, "0"),
-    vk: cachedVK!, // cachedVK is assigned just above — guaranteed non-null at this point
+    vk: cachedVK ?? new Uint8Array(),
+    timestamp: ts,
     durationMs: Math.round(performance.now() - t0),
   };
 }
@@ -200,15 +180,88 @@ export async function computeCommitment(
   return "0x" + c.toString(16).padStart(64, "0");
 }
 
-function writeFieldU64(buf: Uint8Array, offset: number, value: bigint): void {
-  const view = new DataView(buf.buffer, buf.byteOffset + offset, 32);
-  view.setBigUint64(24, value, false /* big-endian */);
+export async function debugGenerateProof(inputs: ProverInputs): Promise<Record<string, unknown>> {
+  await ensureInit();
+  const commitment = await computePoseidonCommitmentBN254(
+    inputs.dataSourceSecret,
+    inputs.privateValue,
+  );
+  const ts = Math.floor(Date.now() / 1000);
+  const attTypeNum =
+    inputs.attestationType === "income"
+      ? 1
+      : inputs.attestationType === "balance"
+        ? 2
+        : 3;
+
+  const noir = new noirModule.Noir(circuitArtifact);
+  const exec = await noir.execute({
+    monthly_income: String(inputs.privateValue),
+    data_source_secret: String(inputs.dataSourceSecret),
+    minimum_threshold: String(inputs.threshold),
+    attestation_type: String(attTypeNum),
+    timestamp: String(ts),
+    data_commitment: commitment.toString(),
+  });
+
+  const backendAny = ultraHonkBackend as any;
+  await backendAny.instantiate();
+  const proofWithPublicInputs = await backendAny.api.acirProveUltraHonk(
+    backendAny.acirUncompressedBytecode,
+    gunzip(exec.witness),
+  );
+  const { proof: splitProof } = bbModule.splitHonkProof(proofWithPublicInputs, 4);
+
+  return {
+    commitment: commitment.toString(),
+    witnessLength: exec.witness?.length ?? null,
+    proofLength: splitProof instanceof Uint8Array ? splitProof.length : splitProof?.length ?? null,
+  };
 }
 
-function writeFieldU32(buf: Uint8Array, offset: number, value: bigint): void {
-  const view = new DataView(buf.buffer, buf.byteOffset + offset, 32);
-  view.setUint32(28, Number(value & 0xffffffffn), false);
-  view.setUint32(24, Number((value >> 32n) & 0xffffffffn), false);
+export async function debugWitnessOnly(inputs: ProverInputs): Promise<Record<string, unknown>> {
+  await ensureInit();
+  const commitment = await computePoseidonCommitmentBN254(
+    inputs.dataSourceSecret,
+    inputs.privateValue,
+  );
+  const ts = Math.floor(Date.now() / 1000);
+  const attTypeNum =
+    inputs.attestationType === "income"
+      ? 1
+      : inputs.attestationType === "balance"
+        ? 2
+        : 3;
+
+  const noir = new noirModule.Noir(circuitArtifact);
+  const exec = await noir.execute({
+    monthly_income: String(inputs.privateValue),
+    data_source_secret: String(inputs.dataSourceSecret),
+    minimum_threshold: String(inputs.threshold),
+    attestation_type: String(attTypeNum),
+    timestamp: String(ts),
+    data_commitment: commitment.toString(),
+  });
+
+  return {
+    commitment: commitment.toString(),
+    witnessLength: exec.witness?.length ?? null,
+    returnValue: exec.returnValue ?? null,
+  };
+}
+
+export async function debugVerificationKey(): Promise<Record<string, unknown>> {
+  await ensureInit();
+  const backend = new bbModule.UltraHonkBackend(circuitArtifact.bytecode);
+  const vk = await backend.getVerificationKey();
+  return { vkLength: vk.length };
+}
+
+function writeField(buf: Uint8Array, offset: number, value: bigint): void {
+  const normalized = value.toString(16).padStart(64, "0");
+  for (let i = 0; i < 32; i++) {
+    buf[offset + i] = parseInt(normalized.slice(i * 2, i * 2 + 2), 16);
+  }
 }
 
 function bytesToHex(bytes: Uint8Array): string {

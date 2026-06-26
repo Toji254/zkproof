@@ -133,7 +133,7 @@ export async function submitAttestation(
   const server: Any = new rpc.Server(RPC_URL);
 
   // 1. Build the 4 × 32-byte public inputs.
-  const thresholdNum = Number(threshold);
+  const thresholdNum = Number(publicInputs[0] ?? threshold);
   const attTypeNum =
     attestationType === "income"
       ? 1
@@ -142,7 +142,7 @@ export async function submitAttestation(
         : attestationType === "credit"
           ? 3
           : 1;
-  const timestampNum = Math.floor(Date.now() / 1000);
+  const timestampNum = Number(publicInputs[2]);
   const commitmentHex = publicInputs[3];
 
   const pubInputs = new Uint8Array(128);

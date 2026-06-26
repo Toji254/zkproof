@@ -9,4 +9,4 @@ data_source_secret = "42"
 minimum_threshold = "3000"
 attestation_type = "1"
 timestamp = "1750000000"
-data_commitment = "" # Will be computed from poseidon::bn254::hash_2([42, 5000])
+data_commitment = "13988306863705040806969577967676383014024550304225226596791335488617450997889"
