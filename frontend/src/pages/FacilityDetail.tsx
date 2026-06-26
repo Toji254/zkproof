@@ -231,11 +231,11 @@ export default function FacilityDetail({
     setLoading(true);
     setLogs([]);
     setProgress(5);
-    addLog('Initializing Noir + bb.js (one-time ~150MB download on first run)...');
+    addLog('Preparing the private proof engine (one-time prover download on first run)...');
 
     try {
       setProgress(30);
-      addLog(`Compiling witness for ${formData.attestationType} = ${val}...`);
+      addLog(`Preparing a private qualification check for ${formData.attestationType} = ${val}...`);
       if (formData.attestationType === 'balance' && selectedWalletAsset) {
         addLog(`Using detected wallet asset ${selectedWalletAsset.code} balance ${selectedWalletAsset.balance}.`);
       }
@@ -251,7 +251,7 @@ export default function FacilityDetail({
         dataSourceSecret,
         Number(val),
       );
-      addLog(`Poseidon BN254 commitment computed in browser.`);
+      addLog(`Private commitment computed locally in the browser.`);
 
       setProgress(100);
       addLog(`Commitment: ${commitmentHex.slice(0, 24)}…${commitmentHex.slice(-8)}`);
@@ -272,7 +272,7 @@ export default function FacilityDetail({
       }));
     } catch (err: any) {
       console.error(err);
-      addLog(`Error: ${err?.message ?? 'Failed to compute commitment'}`);
+      addLog(`Qualification setup failed: ${err?.message ?? 'Failed to compute commitment'}`);
     } finally {
       setLoading(false);
     }
@@ -299,11 +299,11 @@ export default function FacilityDetail({
     setLoading(true);
     setLogs([]);
     setProgress(5);
-    addLog('Loading UltraHonk prover (Barretenberg WASM)...');
+    addLog('Loading the browser proof engine...');
 
     try {
       setProgress(30);
-      addLog('Executing Noir circuit to produce witness...');
+      addLog('Executing the qualification circuit locally...');
 
       setProgress(60);
       const result = await generateProof({
@@ -315,12 +315,12 @@ export default function FacilityDetail({
 
       setProgress(95);
       addLog(
-        `Proof generated in ${(result.durationMs / 1000).toFixed(1)}s ` +
+        `Private qualification proof generated in ${(result.durationMs / 1000).toFixed(1)}s ` +
           `(${result.proof.length} bytes).`,
       );
 
       addLog(
-        `Public inputs: threshold=${formData.threshold}, type=${zkState.attestationType}, ` +
+        `Public attestation data prepared: threshold=${formData.threshold}, type=${zkState.attestationType}, ` +
           `ts=${result.timestamp}, commitment=${result.commitmentHex.slice(0, 18)}…`,
       );
       if (zkState.attestationType === 'balance') {
@@ -341,7 +341,7 @@ export default function FacilityDetail({
       }));
     } catch (err: any) {
       console.error(err);
-      addLog(`Error: ${err?.message ?? 'Failed to generate proof'}`);
+      addLog(`Qualification failed: ${err?.message ?? 'Failed to generate proof'}`);
     } finally {
       setLoading(false);
     }
@@ -841,12 +841,12 @@ export default function FacilityDetail({
             {slug === 'generate-proof' && (
               <div className="glass-card" style={{ padding: '32px', border: '1px solid rgba(136,153,170,0.1)' }}>
                 <h3 style={{ textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px', color: '#00d4aa' }}>
-                  ZK Proof Engine
+                  Renter Proof Engine
                 </h3>
 
                 <div style={{ marginBottom: '20px', padding: '12px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.1)' }}>
                   <span style={{ fontSize: '10px', color: '#8899aa', display: 'block', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Active commitment (from Step 01)
+                    Private commitment from Step 01
                   </span>
                   <span style={{ fontSize: '11px', color: zkState.commitment ? '#e8ecf1' : '#ff4466', wordBreak: 'break-all' }}>
                     {zkState.commitment || 'No commitment found. Please complete Step 01.'}
@@ -873,7 +873,7 @@ export default function FacilityDetail({
                     }}
                   />
                   <span style={{ fontSize: '10px', color: '#556677', marginTop: '6px', display: 'block' }}>
-                    This is the public value you prove your private data exceeds{formData.attestationType === 'balance' ? ` in ${selectedWalletAsset?.code || zkState.selectedAssetCode || 'the selected asset'}` : ''}.
+                    This is the landlord requirement the renter proves they meet{formData.attestationType === 'balance' ? ` in ${selectedWalletAsset?.code || zkState.selectedAssetCode || 'the selected asset'}` : ''}.
                   </span>
                 </div>
 
@@ -884,12 +884,12 @@ export default function FacilityDetail({
                   className="btn-zk btn-zk-primary"
                   style={{ width: '100%', padding: '14px 0' }}
                 >
-                  {loading ? 'COMPILING WITNESS...' : 'GENERATE ZK PROOF'}
+                  {loading ? 'GENERATING PRIVATE PROOF...' : 'GENERATE PRIVATE PROOF'}
                 </button>
 
                 {zkState.proof && !loading && (
                   <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(0, 212, 170, 0.05)', border: '1px dashed #00d4aa' }}>
-                    <div style={{ fontSize: '10px', color: '#00d4aa', textTransform: 'uppercase', marginBottom: '4px' }}>Active ZK Proof</div>
+                    <div style={{ fontSize: '10px', color: '#00d4aa', textTransform: 'uppercase', marginBottom: '4px' }}>Active qualification proof</div>
                     <div style={{ fontSize: '11px', wordBreak: 'break-all', color: '#e8ecf1' }}>{zkState.proof.slice(0, 64)}...</div>
                   </div>
                 )}
@@ -900,16 +900,16 @@ export default function FacilityDetail({
             {slug === 'on-chain-attestation' && (
               <div className="glass-card" style={{ padding: '32px', border: '1px solid rgba(136,153,170,0.1)' }}>
                 <h3 style={{ textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px', color: '#00d4aa' }}>
-                  Soroban Contract Attestation
+                  Issue Attestation on Stellar
                 </h3>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                   <div style={{ padding: '12px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.1)' }}>
                     <span style={{ fontSize: '10px', color: '#8899aa', display: 'block', textTransform: 'uppercase', marginBottom: '4px' }}>
-                      ZK Proof (from Step 02)
+                      Private proof from Step 02
                     </span>
                     <span style={{ fontSize: '11px', color: zkState.proof ? '#e8ecf1' : '#ff4466', wordBreak: 'break-all' }}>
-                      {zkState.proof ? `${zkState.proof.slice(0, 48)}...` : 'No ZK proof found. Please complete Step 02.'}
+                      {zkState.proof ? `${zkState.proof.slice(0, 48)}...` : 'No private proof found. Please complete Step 02.'}
                     </span>
                   </div>
 
@@ -918,7 +918,7 @@ export default function FacilityDetail({
                       Execution
                     </span>
                     <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 600 }}>
-                      ON-CHAIN — Soroban contract via Stellar Wallet
+                      STELLAR TESTNET — Soroban contract via Stellar Wallet
                     </span>
                   </div>
                 </div>
@@ -929,7 +929,7 @@ export default function FacilityDetail({
                   className="btn-zk btn-zk-primary"
                   style={{ width: '100%', padding: '14px 0' }}
                 >
-                  {loading ? 'SUBMITTING TO LEDGER...' : 'SUBMIT ON-CHAIN ATTESTATION'}
+                  {loading ? 'SUBMITTING TO STELLAR...' : 'ISSUE ATTESTATION'}
                 </button>
 
                 {zkState.txHash && !loading && (
@@ -955,12 +955,16 @@ export default function FacilityDetail({
             {slug === 'verify' && (
               <div className="glass-card" style={{ padding: '32px', border: '1px solid rgba(136,153,170,0.1)' }}>
                 <h3 style={{ textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px', color: '#00d4aa' }}>
-                  Verify Attestation Credentials
+                  Landlord Verification Portal
                 </h3>
+
+                <p style={{ marginTop: 0, marginBottom: '20px', fontSize: '11px', color: '#8899aa', lineHeight: 1.6 }}>
+                  This result is verified on Stellar without revealing the renter&apos;s private financial data.
+                </p>
 
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: '#8899aa', marginBottom: '8px', textTransform: 'uppercase' }}>
-                    Holder Stellar Wallet Address
+                    Renter wallet address
                   </label>
                   <input
                     type="text"
@@ -982,7 +986,7 @@ export default function FacilityDetail({
 
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: '#8899aa', marginBottom: '8px', textTransform: 'uppercase' }}>
-                    Attestation Type
+                    Requirement type
                   </label>
                   <select
                     value={formData.verifyType}
@@ -1010,7 +1014,7 @@ export default function FacilityDetail({
                   className="btn-zk btn-zk-primary"
                   style={{ width: '100%', padding: '14px 0' }}
                 >
-                  {loading ? 'QUERYING SOROBAN...' : 'RUN VERIFICATION'}
+                  {loading ? 'CHECKING STELLAR...' : 'CHECK QUALIFICATION'}
                 </button>
 
                 {/* Verification results display */}
@@ -1021,29 +1025,29 @@ export default function FacilityDetail({
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00d4aa' }} />
                           <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 600, textTransform: 'uppercase' }}>
-                            VERIFICATION SUCCESSFUL: HOLDER ELIGIBLE
+                            QUALIFIED
                           </span>
                         </div>
                         <table style={{ width: '100%', fontSize: '11px', color: '#8899aa', borderCollapse: 'collapse' }}>
                           <tbody>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Type:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Requirement:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', fontWeight: 600 }}>{verificationResult.type}</td>
                             </tr>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Proven Min:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Requirement proven:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', fontWeight: 600 }}>${verificationResult.threshold}</td>
                             </tr>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Issued At:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Issued:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right' }}>{verificationResult.issuedAt}</td>
                             </tr>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Expires At:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Expires:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right' }}>{verificationResult.expiresAt}</td>
                             </tr>
                             <tr>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Proof Hash:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Network proof:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', wordBreak: 'break-all' }}>{verificationResult.proofHash}</td>
                             </tr>
                           </tbody>
@@ -1055,13 +1059,18 @@ export default function FacilityDetail({
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4466' }} />
                           <span style={{ fontSize: '11px', color: '#ff4466', fontWeight: 600, textTransform: 'uppercase' }}>
                             {verificationResult.error
-                              ? 'VERIFICATION FAILED'
-                              : 'VERIFICATION FAILED: NO VALID RECORD FOUND'}
+                              ? 'NOT QUALIFIED'
+                              : 'NO VALID QUALIFICATION FOUND'}
                           </span>
                         </div>
                         {verificationResult.error && (
                           <div style={{ marginTop: '10px', fontSize: '11px', color: '#ff9fb1', lineHeight: 1.5 }}>
                             {verificationResult.error}
+                          </div>
+                        )}
+                        {!verificationResult.error && (
+                          <div style={{ marginTop: '10px', fontSize: '11px', color: '#ff9fb1', lineHeight: 1.5 }}>
+                            Qualification failed. The renter either did not meet the threshold or no valid attestation was issued.
                           </div>
                         )}
                       </div>

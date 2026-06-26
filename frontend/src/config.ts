@@ -90,65 +90,65 @@ export interface FooterConfig {
 
 export const siteConfig: SiteConfig = {
   language: "en",
-  siteTitle: "zkProof — ZK Financial Attestation on Stellar",
-  siteDescription: "Generate verifiable financial attestations using zero-knowledge proofs on Stellar. Prove income, balance, or credit eligibility without revealing underlying data.",
+  siteTitle: "ProofPass by zkProof — Private Rental Qualification on Stellar",
+  siteDescription: "ProofPass lets a renter prove they meet a landlord's requirement without exposing salary history, bank statements, or wallet activity.",
 }
 
 export const navigationConfig: NavigationConfig = {
-  brandName: "zkProof",
+  brandName: "ProofPass",
   links: [
-    { label: "Protocol", href: "/#manifesto" },
-    { label: "Process", href: "/#facilities" },
-    { label: "Verify", href: "/facility/verify" },
-    { label: "Stack", href: "/#archives" },
+    { label: "Why", href: "/#manifesto" },
+    { label: "How It Works", href: "/#facilities" },
+    { label: "Landlord Verify", href: "/facility/verify" },
+    { label: "Tech", href: "/#archives" },
   ],
 }
 
 export const heroConfig: HeroConfig = {
-  eyebrow: "Zero-Knowledge Financial Attestation on Stellar",
+  eyebrow: "Private rental qualification on Stellar",
   titleLines: [
-    "PROVE IT.",
-    "WITHOUT",
-    "SHOWING IT.",
+    "PROVE YOU",
+    "QUALIFY.",
+    "REVEAL NOTHING.",
   ],
-  leadText: "Generate verifiable financial attestations using zero-knowledge proofs. Your data never leaves your browser. Verifiers get a YES or NO — nothing else.",
+  leadText: "ProofPass lets a renter prove they meet a landlord's requirement without exposing salary history, bank statements, or wallet activity.",
   supportingNotes: [
-    "Noir circuits generate ZK proofs locally in your browser. Only the cryptographic attestation touches the blockchain.",
-    "Soroban smart contracts verify BN254 pairing proofs on-chain. Tamper-proof attestations with 90-day validity.",
-    "Renting, DeFi, freelancing, credit checks — prove eligibility without exposing bank statements, pay stubs, or balances.",
+    "Generate the proof locally in your browser. Sensitive data never leaves your device.",
+    "Soroban verifies the proof on Stellar testnet and records a tamper-proof attestation with an expiry date.",
+    "The landlord sees only YES / NO, the proven threshold, and whether the attestation is still valid.",
   ],
 }
 
 export const manifestoConfig: ManifestoConfig = {
   videoPath: "",
   fallbackImagePath: "/images/step2-proof.jpg",
-  text: "Every day, millions of people are forced to expose their entire financial history just to pass simple eligibility checks. Landlords demand bank statements. Credit checks expose your full history. Cross-border freelancing requires proving source-of-funds by sharing everything. DeFi protocols need thresholds but don't want liability. The core tension is clear: institutions need verification, users need privacy. Today you can only have one. zkProof changes this. Built on Stellar using Noir zero-knowledge circuits and Soroban smart contracts, it lets users generate verifiable financial attestations. A Noir circuit generates a ZK proof that your income exceeds a threshold — without revealing the actual number. A Soroban verifier checks the proof on-chain using BN254 pairing verification. The result is an on-chain attestation — tamper-proof, expiring credential. The verifier gets YES or NO plus an expiry date. Nothing else.",
+  text: "Landlords should not need your full financial history to decide whether you qualify. ProofPass turns that invasive check into a private yes/no attestation. The renter generates a proof locally, the Soroban contract verifies it on Stellar, and the landlord sees only whether the requirement was met, what threshold was proven, and when the attestation expires. The salary, bank statement, wallet history, and underlying witness data never leave the renter's device.",
 }
 
 export const facilitiesConfig: FacilitiesConfig = {
-  sectionLabel: "The Process",
-  detailBackText: "BACK TO PROCESS",
-  detailNotFoundText: "Step not found in the attestation pipeline.",
-  detailReturnText: "Return to Process Overview",
+  sectionLabel: "How It Works",
+  detailBackText: "BACK TO FLOW",
+  detailNotFoundText: "Step not found in the renter qualification flow.",
+  detailReturnText: "Return to Flow Overview",
   items: [
     {
       slug: "enter-data",
-      name: "ENTER DATA",
+      name: "RENTER INPUT",
       code: "STEP 01",
-      address: "LOCAL BROWSER EXECUTION",
-      status: "Privacy: Absolute — Data never leaves device",
-      email: "INPUT: Income, Balance, Credit Score",
-      phone: "OUTPUT: Poseidon Commitment",
-      ctaText: "Launch Data Panel",
+      address: "PRIVATE BROWSER SESSION",
+      status: "Private — the renter's raw data never leaves the device",
+      email: "Renter enters income, balance, or credit data locally",
+      phone: "Output: a private commitment tied to this session",
+      ctaText: "Start renter proof",
       ctaHref: "/facility/enter-data",
       image: "/images/step1-data.jpg",
       utcOffset: 0,
       article: {
-        title: "Local Data Entry with Absolute Privacy",
+        title: "The renter enters private financial data locally",
         paragraphs: [
-          "The user enters their financial data directly in the browser. This data never leaves the device — not to our servers, not to the blockchain, not anywhere. The entire process happens client-side.",
-          "The input data is hashed using the Poseidon hash function, a ZK-friendly cryptographic primitive designed specifically for use in zero-knowledge circuits. This produces a commitment that will be used in the proof generation.",
-          "The original data remains in the browser's memory only during the proof generation process and is immediately discarded. Even the user cannot recover the original input from the commitment alone.",
+          "The renter enters the private value directly in the browser. For the hero demo, that value is monthly income used for rental pre-qualification.",
+          "Nothing is uploaded to a server and nothing is written on-chain at this stage. The app derives a commitment locally so the later proof is bound to this exact private input without revealing it.",
+          "This is the key privacy promise of ProofPass: the landlord never receives the renter's bank statement, salary history, transaction history, or other raw financial records.",
         ],
       },
     },
@@ -156,62 +156,62 @@ export const facilitiesConfig: FacilitiesConfig = {
       slug: "generate-proof",
       name: "GENERATE PROOF",
       code: "STEP 02",
-      address: "NOIR CIRCUIT EXECUTION",
-      status: "Circuit: BN254 + UltraHonk Backend",
-      email: "INPUT: Witness + Threshold",
-      phone: "OUTPUT: ZK Proof + Public Inputs",
-      ctaText: "Open Proof Engine",
+      address: "LOCAL PROOF ENGINE",
+      status: "Browser-side proof generation with Noir + Barretenberg",
+      email: "Input: renter data + landlord threshold",
+      phone: "Output: zero-knowledge proof + public attestation inputs",
+      ctaText: "Generate renter proof",
       ctaHref: "/facility/generate-proof",
       image: "/images/step2-proof.jpg",
       utcOffset: 0,
       article: {
-        title: "Noir Circuit Generates Zero-Knowledge Proof",
+        title: "The browser proves the renter meets the requirement",
         paragraphs: [
-          "A Noir circuit takes the user's financial data as a private witness and the threshold as a public input. The circuit proves that the witness satisfies the constraint — for example, that income exceeds $3,000/month.",
-          "The proof is generated using the UltraHonk backend, which produces a compact, non-interactive proof that can be verified efficiently. The entire process completes in under 5 seconds on modern hardware.",
-          "The resulting proof reveals nothing about the actual income value. It only proves that some value, kept secret, satisfies the public constraint. This is the mathematical magic of zero-knowledge proofs.",
+          "The renter chooses the public requirement they want to satisfy — for example, proving monthly income is at least 3,000 for a landlord screening check.",
+          "A Noir circuit turns that into a zero-knowledge proof. The proof says the requirement was met without disclosing the renter's actual number.",
+          "If the renter is below the threshold, the proof path should fail. That failure case matters because it shows the rule is enforced by the circuit itself, not by trust or presentation logic.",
         ],
       },
     },
     {
       slug: "on-chain-attestation",
-      name: "ON-CHAIN ATTEST",
+      name: "ISSUE ATTESTATION",
       code: "STEP 03",
-      address: "SOROBAN SMART CONTRACT",
-      status: "Network: Stellar Testnet — 90 Day Validity",
-      email: "INPUT: ZK Proof + Public Inputs",
-      phone: "OUTPUT: Attestation Credential",
-      ctaText: "Learn More",
+      address: "SOROBAN CONTRACT ON TESTNET",
+      status: "Stellar testnet attestation with 90-day validity",
+      email: "Input: proof + attestation inputs",
+      phone: "Output: tamper-proof qualification record",
+      ctaText: "Issue attestation",
       ctaHref: "/facility/on-chain-attestation",
       image: "/images/step3-chain.jpg",
       utcOffset: 0,
       article: {
-        title: "Soroban Verifies and Issues Attestation",
+        title: "Stellar records the private qualification result",
         paragraphs: [
-          "The ZK proof is submitted to a Soroban smart contract on the Stellar network. The contract performs BN254 pairing verification to check the proof's validity entirely on-chain.",
-          "If verification succeeds, the contract issues an attestation credential — a tamper-proof record stored on the blockchain that anyone can query. The attestation includes the proof type, threshold, issue date, and expiry.",
-          "The verifier can now check the attestation by simply querying the contract. They receive a YES or NO answer plus the expiry date. The original financial data remains completely hidden.",
+          "The proof is submitted to a Soroban smart contract on Stellar testnet. The contract verifies the proof on-chain and rejects invalid or inconsistent inputs.",
+          "If verification succeeds, the contract stores a reusable attestation tied to the renter's wallet address, the requirement type, and an expiry window.",
+          "That gives landlords and other verifiers a tamper-proof way to check qualification later without ever handling the renter's raw financial data.",
         ],
       },
     },
     {
       slug: "verify",
-      name: "VERIFY",
+      name: "LANDLORD VERIFY",
       code: "STEP 04",
-      address: "QUERY ATTESTATION",
-      status: "Result: YES/NO + Expiry Only",
-      email: "INPUT: Stellar Address + Type",
-      phone: "OUTPUT: Verification Result",
-      ctaText: "Run Verification",
+      address: "VERIFIER PORTAL",
+      status: "YES / NO + threshold + expiry only",
+      email: "Input: renter address + requirement type",
+      phone: "Output: qualification result without disclosure",
+      ctaText: "Landlord verify",
       ctaHref: "/facility/verify",
       image: "/images/step4-verify.jpg",
       utcOffset: 0,
       article: {
-        title: "Anyone Can Verify Without Seeing Data",
+        title: "The landlord gets the answer without seeing the renter's life",
         paragraphs: [
-          "A verifier — such as a landlord, DAO governance system, or DeFi protocol — queries the Soroban contract with the user's Stellar address and the attestation type they want to verify.",
-          "The contract returns a simple result: whether a valid attestation exists, what threshold was proven, when it was issued, and when it expires. The verifier learns nothing about the user's actual financial data.",
-          "This creates a powerful new primitive for privacy-preserving finance. Users can prove eligibility for apartments, loans, DeFi pools, and cross-border payments without ever revealing sensitive financial information.",
+          "The verifier enters the renter's address and checks whether a valid rental qualification attestation exists for the chosen requirement type.",
+          "The result is intentionally simple: qualified or not, what threshold was proven, when it was issued, and when it expires. The verifier never sees the renter's salary, balances, account history, or source documents.",
+          "That is what makes ProofPass useful beyond crypto. The same pattern can later work for visas, scholarships, freelancers, or loan pre-checks, but the landlord flow is the clearest first use case.",
         ],
       },
     },
@@ -219,19 +219,19 @@ export const facilitiesConfig: FacilitiesConfig = {
 }
 
 export const observationConfig: ObservationConfig = {
-  sectionLabel: "Live Verification Feed",
+  sectionLabel: "Live Verification View",
   videoPath: "",
   fallbackImagePath: "/images/step3-chain.jpg",
-  statusText: "NETWORK ACTIVE — STELLAR TESTNET",
-  latLabel: "LAT",
-  lonLabel: "LON",
+  statusText: "STELLAR TESTNET — QUALIFICATION CHECKS LIVE",
+  latLabel: "REQ",
+  lonLabel: "EXP",
   initialLat: -14.23,
   initialLon: -51.92,
 }
 
 export const archivesConfig: ArchivesConfig = {
   sectionLabel: "Technology Stack",
-  vaultTitle: "View All Technologies",
+  vaultTitle: "Why judges can trust this",
   closeText: "Close Vault",
   items: [
     {
@@ -254,6 +254,6 @@ export const archivesConfig: ArchivesConfig = {
 }
 
 export const footerConfig: FooterConfig = {
-  copyrightText: "zkProof — Built for Stellar Hacks: Real-World ZK",
-  statusText: "Powered by Noir · Soroban · BN254 · Poseidon",
+  copyrightText: "ProofPass by zkProof — Built for Stellar Hacks: Real-World ZK",
+  statusText: "Private qualification on Stellar · Noir · Soroban · Poseidon",
 }

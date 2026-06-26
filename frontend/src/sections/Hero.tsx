@@ -234,7 +234,7 @@ export default function Hero({
               className="btn-zk btn-zk-primary"
               style={{ fontSize: '11px', padding: '12px 24px' }}
             >
-              Start Proving
+              Start renter proof
             </Link>
             <Link
               to="/facility/verify"
@@ -242,7 +242,7 @@ export default function Hero({
               className="btn-zk btn-zk-outline"
               style={{ fontSize: '11px', padding: '12px 24px' }}
             >
-              Verify Attestation
+              Landlord verify
             </Link>
           </div>
 

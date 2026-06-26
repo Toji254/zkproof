@@ -1,6 +1,6 @@
-# zkProof Demo Script (2:30)
+# ProofPass Demo Script (2:30)
 
-Goal: show that zkProof lets a user prove financial eligibility on Stellar without revealing the underlying financial data.
+Goal: show that a renter can prove they qualify without exposing salary history, bank statements, or wallet activity.
 
 Recording setup
 - Browser already open at the frontend home page.
@@ -10,90 +10,97 @@ Recording setup
 - Browser zoom: 100%.
 - Record at 1920x1080 fullscreen.
 
-## 0:00-0:15 — Hook
+## 0:00-0:12 — Hook
 On screen
 - Start on the landing page hero.
-- Keep the `zkProof` title and the `CONNECT WALLET` button visible.
+- Keep the `ProofPass` title and the two CTAs visible.
 
 Narration
-"What if you could prove you qualify financially without exposing your bank statements, salary, or transaction history? zkProof does exactly that. It uses zero-knowledge proofs on Stellar so the verifier gets a yes-or-no answer, and nothing else."
+"Landlords should not need your full financial life just to decide whether you qualify. ProofPass lets a renter prove they meet the requirement without exposing salary history, bank statements, or wallet activity."
 
-Action
-- No click yet. Let the hero breathe for 2-3 seconds.
-
-## 0:15-0:35 — Problem + why now
+## 0:12-0:28 — Explain the product in plain English
 On screen
-- Scroll slightly so the homepage still feels alive, then return to the hero if needed.
+- Hover near the hero notes or scroll slightly and return to the top.
 
 Narration
-"Today, landlords, lenders, and on-chain apps usually force users to overshare sensitive financial data just to pass a threshold check. That is a broken tradeoff. zkProof turns that check into a privacy-preserving attestation that can be verified on-chain."
+"The renter generates the proof locally in the browser. Stellar verifies it on-chain. The landlord sees only a yes-or-no qualification result, the threshold that was proven, and the expiry date. Nothing else is exposed."
 
-Action
-- Move cursor toward `CONNECT WALLET`.
-
-## 0:35-0:50 — Connect wallet
+## 0:28-0:42 — Connect wallet
 On screen
-- Click `CONNECT WALLET` (`#connect-wallet-btn`).
-- In the wallet picker, select the installed wallet and connect.
-- After connection, briefly show the connected address state in the header.
+- Click `CONNECT WALLET`.
+- Select the wallet and connect.
+- Briefly show the connected address state.
 
 Narration
-"First, the user connects a Stellar wallet. zkProof uses the wallet as the identity anchor for the attestation that will be written to Soroban."
+"The wallet anchors the attestation on Stellar testnet. It is not where the renter reveals private financial data. The sensitive input stays in the browser."
 
-## 0:50-1:10 — Enter private data locally
+## 0:42-1:00 — Renter input
 On screen
-- Navigate to Step 01 / `ENTER DATA` using the Process section card or go directly to `/facility/enter-data`.
-- Click into `#income-input` and type `5000`.
-- Keep the right-hand logs/status area visible.
+- Open `Renter Input`.
+- In `#income-input`, enter `5000`.
+- Keep the status panel visible.
 
 Narration
-"Here the user enters private financial data locally in the browser. In this example, I am using a monthly income of five thousand dollars. This raw value never goes to a server and never goes on-chain."
+"Here the renter enters private monthly income locally in the browser. For this demo, I am using five thousand dollars. This raw value never goes to a server and never goes on-chain."
 
-## 1:10-1:25 — Generate commitment
+## 1:00-1:12 — Generate commitment
 On screen
-- Click the Step 01 action button that generates the commitment.
-- Pause on the logs when the Poseidon commitment appears.
+- Click the Step 01 action button.
+- Pause on the commitment status area.
 
 Narration
-"zkProof first computes a Poseidon commitment client-side. That binds the private value cryptographically without disclosing it, and prepares the input for proof generation."
+"ProofPass first creates a commitment locally. That binds the private input cryptographically without disclosing it."
 
-## 1:25-1:50 — Generate the zero-knowledge proof
+## 1:12-1:35 — Generate the proof
 On screen
-- Navigate to Step 02 / `GENERATE PROOF`.
-- In `#threshold-input`, enter `3000` if it is not already filled.
+- Open `Generate Proof`.
+- In `#threshold-input`, enter `3000` if needed.
 - Click `#generate-proof-btn`.
-- Let the progress UI and logs show witness execution, UltraHonk proving, and proof generation.
+- Let the progress UI and logs show the proof flow.
 
 Narration
-"Next, the Noir circuit proves one very specific claim: my private income is greater than the public threshold of three thousand dollars. The proof is generated in the browser with Barretenberg and UltraHonk, so the verifier learns the claim is true without learning the actual income."
+"Now the browser proves one specific claim: the renter's private income is at least three thousand dollars. The landlord does not learn the actual income. They only learn that the requirement was met."
 
-## 1:50-2:10 — Submit on-chain attestation
+## 1:35-1:55 — Issue the attestation on Stellar
 On screen
-- As soon as proof generation completes, click the on-chain attest action in Step 03.
+- Open `Issue Attestation`.
+- Click the on-chain attestation button.
 - Approve the wallet signature.
-- Pause long enough for the success state and transaction hash to appear.
+- Pause on the success state and transaction hash.
 
 Narration
-"Now I submit that proof to the Soroban verifier contract on Stellar testnet. The contract verifies the proof on-chain and issues a time-bound attestation tied to this wallet address."
+"The Soroban contract verifies the proof on Stellar testnet and stores a time-bound attestation tied to the renter's wallet address."
 
-## 2:10-2:25 — Verify with zero data leakage
+## 1:55-2:15 — Landlord verify
 On screen
-- Navigate to Step 04 / `VERIFY`, or click the `VERIFY` nav button on the homepage (`#verify-nav-btn`) before this section if you want a smoother cut.
-- In `#verify-address-input`, paste the connected Stellar address if it is not already populated.
+- Open `Landlord Verify`.
+- Paste the connected address if needed.
 - Click `#check-attestation-btn`.
-- Hold on the result card showing a valid attestation, threshold, issued date, expiry, and proof hash.
+- Hold on the result card.
 
 Narration
-"A verifier now checks the address on-chain and gets only the attestation result: valid or not, what threshold was proven, and when it expires. They do not get the salary, account history, employer, or any underlying financial records."
+"The landlord now checks the address and sees only the answer they need: qualified or not, what threshold was proven, and when it expires. They never see the renter's underlying financial records."
+
+## 2:15-2:25 — Failure case
+On screen
+- Briefly explain or cut to the failure setup.
+- Show the sample values for the failure path: income `2500`, threshold `3000`.
+
+Narration
+"And if the renter is below the requirement, the proof path should fail or no passing attestation should be issued. That is why zero-knowledge is load-bearing here. The rule is enforced cryptographically, not by trust."
 
 ## 2:25-2:30 — Close
 On screen
-- Keep the successful verification result visible.
+- Keep the successful landlord verification result visible or cut back to the hero.
 
 Narration
-"That is zkProof: privacy-preserving financial eligibility, verified with zero-knowledge proofs, and settled on Stellar."
+"ProofPass turns rental qualification into a private yes-or-no check that anyone can understand and Stellar can verify."
+
+## Demo-safe sample inputs
+- Happy path: income `5000`, threshold `3000`, attestation type `income`
+- Failure path: income `2500`, threshold `3000`, attestation type `income`
 
 ## Fast retake notes
 - If wallet signing slows the take down, reconnect and pre-authorize before recording.
-- If proof generation is slow on the machine, start the click slightly earlier and let the logs carry the middle of the narration.
-- Best proof demo values: income `5000`, threshold `3000`, attestation type `income`.
+- If proof generation is slow on the machine, preload the app once so proving assets cache before the take.
+- Keep Stellar Expert open in a second tab for the attestation transaction.

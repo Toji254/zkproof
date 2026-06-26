@@ -24,20 +24,20 @@ export default function DemoTour({ walletAddress }: DemoTourProps) {
 
   const STEPS: TourStep[] = [
     {
-      title: "👋 Welcome to zkProof!",
-      description: "This interactive tour will guide you through proving and verifying financial eligibility on-chain using Zero-Knowledge proofs and Soroban smart contracts.",
+      title: "👋 Welcome to ProofPass",
+      description: "This tour walks through private rental qualification: the renter proves they qualify, and the landlord sees only the answer they need.",
       targetId: null,
       path: '/',
     },
     {
       title: "🔗 Connect Your Wallet",
-      description: "First, connect your Stellar wallet. You can choose Freighter, Lobstr, xBull, Albedo, Hana, and others using the connection modal.",
+      description: "First, connect a Stellar wallet. The wallet anchors the on-chain attestation, but the renter's private financial input stays in the browser.",
       targetId: "#connect-wallet-btn",
       path: '/',
     },
     {
-      title: "✍️ Enter Private Income Data",
-      description: "Enter your private income. This sensitive value is processed entirely in your browser to compute a Poseidon commitment—it is never exposed to any server or blockchain.",
+      title: "🏠 Renter enters private income",
+      description: "Enter the renter's private income. This value stays in the browser and is used only to create the private commitment and proof.",
       targetId: "#income-input",
       path: '/facility/enter-data',
       action: () => {
@@ -51,8 +51,8 @@ export default function DemoTour({ walletAddress }: DemoTourProps) {
       }
     },
     {
-      title: "🎯 Set Proven Threshold",
-      description: "Specify the minimum threshold you wish to prove (e.g. $3,000). The ZK proof will verify that your income exceeds this amount, while keeping the exact value hidden.",
+      title: "🎯 Set the landlord requirement",
+      description: "Specify the public requirement the renter wants to satisfy, for example monthly income of at least 3,000.",
       targetId: "#threshold-input",
       path: '/facility/generate-proof',
       action: () => {
@@ -66,20 +66,20 @@ export default function DemoTour({ walletAddress }: DemoTourProps) {
       }
     },
     {
-      title: "🔐 Generate ZK Proof & Attest",
-      description: "Click this button to compile the witness locally in your browser, generate the UltraHonk ZK proof, and submit the attestation to our Soroban smart contract.",
+      title: "🔐 Generate the private proof",
+      description: "Click here to generate the zero-knowledge proof locally in the browser. The landlord will later verify the result without seeing the renter's actual income.",
       targetId: "#generate-proof-btn",
       path: '/facility/generate-proof',
     },
     {
-      title: "🔍 Switch to Verifier View",
-      description: "Let's switch to the Verifier view. In this screen, third-parties (e.g., landlords, lenders) can verify your proof credentials on-chain.",
+      title: "🔍 Switch to landlord view",
+      description: "Now switch to the landlord verifier screen. This is the non-crypto view that checks the attestation on Stellar.",
       targetId: "#verify-nav-btn",
       path: '/facility/generate-proof',
     },
     {
-      title: "✅ Verify the Attestation",
-      description: "Paste a Stellar address and select the attestation type to check. The smart contract queries the ledger and returns a simple YES or NO—zero private details are leaked.",
+      title: "✅ Landlord verifies qualification",
+      description: "Paste the renter address and check the requirement type. The verifier gets only the qualification result, threshold, and expiry date.",
       targetId: "#check-attestation-btn",
       path: '/facility/verify',
       action: (address) => {
