@@ -1,4 +1,4 @@
-import { StellarWalletsKit, ensureKit } from "./kit";
+import { signWithKit } from "./wallets";
 import {
   rpc,
   Contract,
@@ -12,18 +12,232 @@ import {
 } from "@stellar/stellar-sdk";
 import { CONTRACT_ID, HORIZON_URL, NETWORK_PASSPHRASE, RPC_URL } from "./config";
 
+// allowHttp: true is required when the URL is a local proxy path (http://)
+// rather than a direct https:// endpoint. Safe in production because
+// RPC_URL is always https:// outside localhost.
+function makeServer(): rpc.Server {
+  return new rpc.Server(RPC_URL, { allowHttp: true });
+}
+
 // The Stellar SDK v12 types are strict (union types for results); to keep
 // this module readable, we cast through `any` at the boundary and reason
 // about runtime shapes in the function bodies.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-function getKit(): typeof StellarWalletsKit {
-  ensureKit();
-  return StellarWalletsKit;
+type RawRpcTransactionStatus = "NOT_FOUND" | "SUCCESS" | "FAILED" | string;
+
+interface RawRpcTransactionResponse {
+  status: RawRpcTransactionStatus;
+  resultXdr?: string;
+  resultMetaXdr?: string;
+  envelopeXdr?: string;
+  diagnosticEventsXdr?: string[];
+  txHash?: string;
 }
 
 let connectedAddress: string | null = null;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatSendTransactionError(sendResponse: Any): string {
+  const details: string[] = [];
+
+  if (sendResponse?.status) {
+    details.push(`status=${sendResponse.status}`);
+  }
+
+  try {
+    const result = sendResponse?.errorResult?.result?.();
+    if (result) {
+      details.push(`result=${String(result)}`);
+    }
+  } catch {
+    // Avoid masking the real send failure with XDR serialization issues.
+  }
+
+  if (Array.isArray(sendResponse?.diagnosticEvents) && sendResponse.diagnosticEvents.length > 0) {
+    details.push(`diagnosticEvents=${sendResponse.diagnosticEvents.length}`);
+  }
+
+  return details.join(", ") || "unknown send failure";
+}
+
+async function rpcRequest<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  const response = await fetch(RPC_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: `zkproof-${method}-${Date.now()}`,
+      method,
+      params,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`RPC ${method} failed (HTTP ${response.status}).`);
+  }
+
+  const payload = (await response.json()) as {
+    error?: { code?: number; message?: string };
+    result?: T;
+  };
+
+  if (payload.error) {
+    throw new Error(
+      payload.error.message || `RPC ${method} failed (${payload.error.code ?? "unknown error"}).`,
+    );
+  }
+
+  if (!payload.result) {
+    throw new Error(`RPC ${method} returned no result.`);
+  }
+
+  return payload.result;
+}
+
+function formatRawTransactionFailure(tx: RawRpcTransactionResponse): string {
+  const details: string[] = [`status=${tx.status}`];
+
+  if (tx.txHash) {
+    details.push(`hash=${tx.txHash}`);
+  }
+
+  if (tx.diagnosticEventsXdr?.length) {
+    details.push(`diagnosticEvents=${tx.diagnosticEventsXdr.length}`);
+  }
+
+  if (tx.resultXdr) {
+    details.push("resultXdr=present");
+  }
+
+  return details.join(", ");
+}
+
+function decodeScValResult(resultXdr?: string): unknown | null {
+  if (!resultXdr) return null;
+
+  try {
+    return scValToNative(xdr.ScVal.fromXDR(resultXdr, "base64"));
+  } catch {
+    return null;
+  }
+}
+
+function decodeScValLike(value: unknown): unknown | null {
+  if (!value) return null;
+
+  try {
+    if (typeof value === "string") {
+      return decodeScValResult(value);
+    }
+
+    return scValToNative(value as xdr.ScVal);
+  } catch {
+    return null;
+  }
+}
+
+function getSimulationReturnValue(simulation: Any): unknown | null {
+  const retval = simulation?.result?.retval;
+  if (retval) {
+    return decodeScValLike(retval);
+  }
+
+  return decodeScValResult(simulation?.results?.[0]?.xdr);
+}
+
+function getTransactionReturnValue(tx: RawRpcTransactionResponse): unknown | null {
+  for (const eventXdr of tx.diagnosticEventsXdr ?? []) {
+    try {
+      const event = xdr.DiagnosticEvent.fromXDR(eventXdr, "base64");
+      const body = event.event().body().v0();
+      const topics = body.topics();
+      if (topics.length < 2) continue;
+
+      const marker = scValToNative(topics[0]);
+      if (marker !== "fn_return") continue;
+
+      return decodeScValLike(body.data());
+    } catch {
+      // Ignore malformed diagnostic events and fall back to null below.
+    }
+  }
+
+  return null;
+}
+
+function formatRejectedAttestationHint(): string {
+  return (
+    "The contract simulated a false result, so signing would not record an attestation. " +
+    "This usually means proof verification failed, the deployed verification key is stale, " +
+    "or the proof inputs no longer match the contract arguments. If you recently changed the " +
+    "circuit or prover, re-upload the keccak verification key with ./scripts/update-vk.sh."
+  );
+}
+
+async function waitForTransaction(
+  server: Any,
+  hash: string,
+  timeoutMs = 30000,
+): Promise<RawRpcTransactionResponse> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    let tx: RawRpcTransactionResponse;
+
+    try {
+      const sdkTx = await server.getTransaction(hash);
+      tx = {
+        status: sdkTx.status,
+        resultXdr: sdkTx.resultXdr,
+        resultMetaXdr: sdkTx.resultMetaXdr,
+        envelopeXdr: sdkTx.envelopeXdr,
+        diagnosticEventsXdr: sdkTx.diagnosticEventsXdr,
+        txHash: hash,
+      };
+    } catch (err: Any) {
+      const message = err?.message ?? String(err);
+      if (!message.includes("Bad union switch")) {
+        throw err;
+      }
+
+      tx = await rpcRequest<RawRpcTransactionResponse>("getTransaction", { hash });
+    }
+
+    if (tx.status !== "NOT_FOUND") {
+      return tx;
+    }
+
+    await sleep(1200);
+  }
+
+  throw new Error(
+    `Transaction is still pending after ${Math.round(timeoutMs / 1000)}s. ` +
+      `Check the hash manually: ${hash}`,
+  );
+}
+
+async function waitForRecordedAttestation(
+  address: string,
+  attestationType: string,
+  attempts = 6,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const { valid } = await checkAttestation(address, attestationType);
+    if (valid) return true;
+
+    if (attempt < attempts - 1) {
+      await sleep(1200);
+    }
+  }
+
+  return false;
+}
 
 export interface WalletAssetBalance {
   id: string;
@@ -34,6 +248,14 @@ export interface WalletAssetBalance {
   numericBalance: number;
   label: string;
   isNative: boolean;
+}
+
+export interface VerificationKeyStatus {
+  exists: boolean;
+  byteLength: number;
+  isPlaceholder: boolean;
+  isExpectedLength: boolean;
+  hexPreview: string;
 }
 
 interface HorizonBalanceLine {
@@ -114,7 +336,8 @@ export async function submitAttestation(
   proofHex: string,
   publicInputs: string[] | null,
   attestationType: string,
-  threshold: number | string,
+  threshold: bigint | number | string,
+  onSubmitted?: (hash: string) => void,
 ): Promise<string> {
   if (!CONTRACT_ID) {
     throw new Error(
@@ -130,10 +353,10 @@ export async function submitAttestation(
     );
   }
 
-  const server: Any = new rpc.Server(RPC_URL);
+  const server: Any = makeServer();
 
-  // 1. Build the 4 × 32-byte public inputs.
-  const thresholdNum = Number(publicInputs[0] ?? threshold);
+  // 1. Build the 4 × 32-byte public inputs bytes (circuit-scaled values).
+  const thresholdValue = BigInt(String(publicInputs[0] ?? threshold));
   const attTypeNum =
     attestationType === "income"
       ? 1
@@ -147,7 +370,7 @@ export async function submitAttestation(
 
   const pubInputs = new Uint8Array(128);
   const dv = new DataView(pubInputs.buffer);
-  dv.setBigUint64(24, BigInt(thresholdNum), false);
+  dv.setBigUint64(24, thresholdValue, false);
   dv.setBigUint64(32 + 24, BigInt(attTypeNum), false);
   dv.setBigUint64(64 + 24, BigInt(timestampNum), false);
   const commitmentBytes = hexToBytes(commitmentHex);
@@ -166,6 +389,13 @@ export async function submitAttestation(
   const contract = new Contract(CONTRACT_ID);
   const sourceAccount = await server.getAccount(connectedAddress);
 
+  // The contract cross-checks the i128 `threshold` arg against the first public
+  // input. For balance proofs that value is already scaled to chain precision
+  // (7 decimals for XLM), so using the raw human-readable string here causes
+  // the attestation to be silently rejected on-chain. Reuse the exact public
+  // input value to keep the contract arguments and proof inputs aligned.
+  const contractThreshold = thresholdValue;
+
   const tx: Any = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
@@ -177,54 +407,94 @@ export async function submitAttestation(
         nativeToScVal(pubInputs, { type: "bytes" }),
         nativeToScVal(proofBytes, { type: "bytes" }),
         nativeToScVal(attestationType, { type: "symbol" }),
-        nativeToScVal(BigInt(thresholdNum), { type: "i128" }),
+        nativeToScVal(contractThreshold, { type: "i128" }),
       ),
     )
     .setTimeout(30)
     .build();
 
+  const simulation: Any = await server.simulateTransaction(tx);
+  if (simulation.error) {
+    throw new Error(
+      `On-chain simulation failed: ${simulation.error}. ` +
+        `If this mentions verification or the VK, re-upload the keccak verification key with ./scripts/update-vk.sh.`,
+    );
+  }
+
+  const simulatedResult = getSimulationReturnValue(simulation);
+  if (simulatedResult === false) {
+    throw new Error(formatRejectedAttestationHint());
+  }
+
   // 4. Simulate before asking the user to sign.
+  // We wrap this in a try/catch that pulls out a plain string error message.
+  // The stellar-sdk sometimes throws a "Bad union switch: N" TypeError when it
+  // fails to decode the XDR of a Soroban panic/error response, which masks the
+  // real contract error. We guard against that here.
   let prepared: Any;
   try {
     prepared = await server.prepareTransaction(tx);
   } catch (err: Any) {
     console.error("Simulation failed:", err);
-    const msg = err?.message ?? String(err);
+    // Pull a human-readable message from various error shapes the SDK may throw.
+    let msg: string = err?.message ?? String(err);
+    // If the SDK itself crashed parsing the error ("Bad union switch"),
+    // try to surface the raw simulation error string instead.
+    if (msg.includes('union switch') || msg.includes('Bad union')) {
+      msg = 'Contract execution failed during simulation. ' +
+        'Possible causes: VK mismatch (run ./scripts/update-vk.sh), ' +
+        'invalid proof length, or circuit constraint violation.';
+    }
     throw new Error(
       `On-chain simulation failed: ${msg}. ` +
-        `If this says "verification failed", the VK on-chain does not match ` +
-        `the circuit — run ./scripts/update-vk.sh.`,
+        `If this says "verification failed" or "VK", the verification key ` +
+        `on-chain does not match the circuit — run ./scripts/update-vk.sh.`,
     );
   }
 
   // 5. Sign via the connected wallet.
   const xdrToSign = prepared.toXDR();
-  const signResult: Any = await getKit().signTransaction(xdrToSign, {
-    networkPassphrase: NETWORK_PASSPHRASE,
-    address: connectedAddress,
-  });
-  if (signResult.error || !signResult.signedTxXdr) {
+  const signedTxXdr = await signWithKit(
+    xdrToSign,
+    connectedAddress,
+    NETWORK_PASSPHRASE,
+  );
+
+  // 6. Submit + poll.
+  let signedTx: Any;
+  try {
+    signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
+  } catch (err: Any) {
     throw new Error(
-      signResult.error?.message ??
-        "Wallet transaction signing failed or was rejected.",
+      `Failed to parse signed transaction XDR: ${err?.message ?? String(err)}. ` +
+        `This usually means the wallet returned an unexpected object shape.`,
+    );
+  }
+  const sendResponse = await server.sendTransaction(signedTx);
+  if (sendResponse.status === "ERROR") {
+    throw new Error(`Transaction submission error: ${formatSendTransactionError(sendResponse)}`);
+  }
+  onSubmitted?.(sendResponse.hash);
+  const final = await waitForTransaction(server, sendResponse.hash);
+  if (final.status !== "SUCCESS") {
+    throw new Error(
+      `Transaction failed on-chain: ${formatRawTransactionFailure(final)}`,
     );
   }
 
-  // 6. Submit + poll.
-  const signedTx = TransactionBuilder.fromXDR(
-    signResult.signedTxXdr,
-    NETWORK_PASSPHRASE,
-  );
-  const sendResponse = await server.sendTransaction(signedTx);
-  if (sendResponse.status === "ERROR") {
+  const finalResult = getTransactionReturnValue(final);
+  if (finalResult === false) {
+    throw new Error(`${formatRejectedAttestationHint()} Transaction hash: ${sendResponse.hash}`);
+  }
+
+  const valid = await waitForRecordedAttestation(connectedAddress, attestationType);
+  if (!valid) {
     throw new Error(
-      `Transaction submission error: ${JSON.stringify(sendResponse.errorResult)}`,
+      "Transaction confirmed, but the attestation was still not visible after several read retries. " +
+        `Check the tx on Stellar Expert and verify the contract state directly. Tx hash: ${sendResponse.hash}`,
     );
   }
-  const final = await server.pollTransaction(sendResponse.hash);
-  if (final.status !== "SUCCESS") {
-    throw new Error(`Transaction failed on-chain: ${final.status}`);
-  }
+
   return sendResponse.hash;
 }
 
@@ -235,7 +505,7 @@ export async function checkAttestation(
 ): Promise<{ valid: boolean; attestation: any | null }> {
   if (!CONTRACT_ID) throw new Error("CONTRACT_ID is not configured.");
 
-  const server: Any = new rpc.Server(RPC_URL);
+  const server: Any = makeServer();
   const contract = new Contract(CONTRACT_ID);
   const dummy = Keypair.random();
   const account = new Account(dummy.publicKey(), "0");
@@ -258,15 +528,10 @@ export async function checkAttestation(
   if (simulation.error) {
     throw new Error(`Read query failed: ${simulation.error}`);
   }
-  if (!simulation.results) {
+  const valid = getSimulationReturnValue(simulation);
+  if (typeof valid !== "boolean") {
     return { valid: false, attestation: null };
   }
-  const result = simulation.results[0];
-  if (!result || !result.xdr) {
-    return { valid: false, attestation: null };
-  }
-  const scVal = xdr.ScVal.fromXDR(result.xdr, "base64");
-  const valid = scValToNative(scVal);
 
   let attestation = null;
   if (valid) {
@@ -285,7 +550,7 @@ export async function getAttestationDetails(
 ): Promise<any | null> {
   if (!CONTRACT_ID) throw new Error("CONTRACT_ID is not configured.");
 
-  const server: Any = new rpc.Server(RPC_URL);
+  const server: Any = makeServer();
   const contract = new Contract(CONTRACT_ID);
   const dummy = Keypair.random();
   const account = new Account(dummy.publicKey(), "0");
@@ -308,12 +573,16 @@ export async function getAttestationDetails(
   if (simulation.error) {
     throw new Error(`Read query failed: ${simulation.error}`);
   }
-  if (!simulation.results) return null;
-  const result = simulation.results[0];
-  if (!result || !result.xdr) return null;
-
-  const scVal = xdr.ScVal.fromXDR(result.xdr, "base64");
-  const nativeVal = scValToNative(scVal);
+  const nativeVal = getSimulationReturnValue(simulation) as
+    | {
+        holder: string;
+        attestation_type: { toString(): string } | string;
+        threshold: bigint | number | string;
+        issued_at: bigint | number | string;
+        expires_at: bigint | number | string;
+        proof_hash: Uint8Array | string;
+      }
+    | null;
   if (!nativeVal) return null;
 
   return {
@@ -335,6 +604,51 @@ export async function getAttestationDetails(
   };
 }
 
+export async function getVerificationKeyStatus(): Promise<VerificationKeyStatus> {
+  if (!CONTRACT_ID) throw new Error("CONTRACT_ID is not configured.");
+  const EXPECTED_VK_BYTES = 1760;
+
+  const server: Any = makeServer();
+  const contract = new Contract(CONTRACT_ID);
+  const dummy = Keypair.random();
+  const account = new Account(dummy.publicKey(), "0");
+
+  const tx: Any = new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call("get_verification_key"))
+    .setTimeout(30)
+    .build();
+
+  const simulation: Any = await server.simulateTransaction(tx);
+  if (simulation.error) {
+    throw new Error(`Verification key query failed: ${simulation.error}`);
+  }
+  const nativeVal = getSimulationReturnValue(simulation) as Uint8Array | null;
+  if (!nativeVal || !(nativeVal instanceof Uint8Array)) {
+    return { exists: false, byteLength: 0, isPlaceholder: false, isExpectedLength: false, hexPreview: "" };
+  }
+
+  const byteLength = nativeVal.length;
+  const hexPreview =
+    "0x" +
+    Array.from(nativeVal.slice(0, Math.min(16, nativeVal.length)), (b: number) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+  const isPlaceholder =
+    byteLength > 0 && Array.from(nativeVal).every((b: number) => b === 0);
+  const isExpectedLength = byteLength === EXPECTED_VK_BYTES;
+
+  return {
+    exists: true,
+    byteLength,
+    isPlaceholder,
+    isExpectedLength,
+    hexPreview,
+  };
+}
+
 // The WalletPicker module calls these to keep the address in sync.
 export function setConnectedAddress(addr: string | null): void {
   connectedAddress = addr;
@@ -344,5 +658,6 @@ export function getConnectedAddress(): string | null {
 }
 export function disconnectWallet(): boolean {
   connectedAddress = null;
+  localStorage.removeItem('zkproof_connected_wallet_id');
   return true;
 }

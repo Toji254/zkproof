@@ -69,7 +69,7 @@ enum DataKey {
     Admin,
     /// Total number of attestations issued (for stats)
     TotalAttestations,
-    /// Verification key for ZK proof verification (fixed 1760 bytes)
+    /// Verification key for ZK proof verification (fixed 1760 raw bytes)
     VerificationKey,
 }
 
@@ -89,6 +89,9 @@ impl ZkProofVerifier {
     /// Constructor — initializes the contract with an admin and uploads the
     /// circuit's verification key. Called once at deploy time.
     pub fn __constructor(env: Env, admin: Address, vk: Bytes) {
+        if UltraHonkVerifier::new(&env, &vk).is_err() {
+            panic!("Invalid verification key");
+        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TotalAttestations, &0u64);
         env.storage().instance().set(&DataKey::VerificationKey, &vk);
@@ -111,6 +114,9 @@ impl ZkProofVerifier {
             .unwrap_or_else(|| panic!("Contract not initialized"));
         if stored_admin != admin {
             panic!("Only admin can store verification key");
+        }
+        if UltraHonkVerifier::new(&env, &vk).is_err() {
+            panic!("Invalid verification key");
         }
         env.storage().instance().set(&DataKey::VerificationKey, &vk);
         log!(&env, "Verification key stored");
@@ -349,10 +355,11 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Bytes, Env};
 
-    fn make_dummy_vk(env: &Env) -> Bytes {
-        // The verifier lib requires exactly 1760 bytes. A zero-byte VK will
-        // fail at the verifier's header parser — that's fine, we just need a
-        // Bytes of the right length to exercise the storage path.
+    fn make_valid_vk(env: &Env) -> Bytes {
+        Bytes::from_slice(env, include_bytes!("../testdata/valid_vk.bin"))
+    }
+
+    fn make_invalid_vk(env: &Env) -> Bytes {
         let mut vk = Bytes::new(env);
         for _ in 0..55 {
             vk.extend_from_slice(&[0u8; 32]);
@@ -362,7 +369,7 @@ mod test {
 
     fn make_client<'a>(env: &'a Env) -> (ZkProofVerifierClient<'a>, Address) {
         let admin = Address::generate(env);
-        let vk = make_dummy_vk(env);
+        let vk = make_valid_vk(env);
         // Register invokes the constructor with the provided args.
         let contract_id = env.register(ZkProofVerifier, (admin.clone(), vk));
         let client = ZkProofVerifierClient::new(env, &contract_id);
@@ -394,12 +401,21 @@ mod test {
         let env = Env::default();
         let (client, admin) = make_client(&env);
 
-        // Overwrite the dummy VK the constructor stored, with a fresh one.
-        let new_vk = make_dummy_vk(&env);
+        // Overwrite the constructor VK with a fresh valid one.
+        let new_vk = make_valid_vk(&env);
         env.mock_all_auths();
         client.store_verification_key(&admin, &new_vk);
 
         let stored = client.get_verification_key().unwrap();
         assert_eq!(stored.len(), new_vk.len());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid verification key")]
+    fn test_constructor_rejects_invalid_verification_key() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let invalid_vk = make_invalid_vk(&env);
+        let _ = env.register(ZkProofVerifier, (admin, invalid_vk));
     }
 }

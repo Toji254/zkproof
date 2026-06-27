@@ -57,3 +57,9 @@ For live judging:
 - load the app once before the demo starts
 - let the proving assets cache
 - do not make the judge wait through a cold first-load if you can avoid it
+
+## If the verification key needs to be refreshed
+
+- open `/ops` in the frontend
+- use `CHECK ON-CHAIN VK` to confirm whether the contract still has the placeholder key or an invalid-length VK upload
+- if needed, use `EXPORT VERIFICATION KEY`, but only upload it if `/ops` reports `1760` bytes; save the file as `circuits/target/vk.bin`, then run `./scripts/update-vk.sh`

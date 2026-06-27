@@ -21,11 +21,42 @@ export default defineConfig({
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
     },
+    proxy: {
+      // Proxy Soroban RPC through Vite to avoid COEP cross-origin blocks.
+      // The Soroban RPC does not send Cross-Origin-Resource-Policy: cross-origin
+      // so direct browser fetches are blocked when COEP=require-corp is set.
+      "/soroban-rpc": {
+        target: "https://soroban-testnet.stellar.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/soroban-rpc/, ""),
+        secure: true,
+      },
+      "/horizon-api": {
+        target: "https://horizon-testnet.stellar.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/horizon-api/, ""),
+        secure: true,
+      },
+    },
   },
   preview: {
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+    proxy: {
+      "/soroban-rpc": {
+        target: "https://soroban-testnet.stellar.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/soroban-rpc/, ""),
+        secure: true,
+      },
+      "/horizon-api": {
+        target: "https://horizon-testnet.stellar.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/horizon-api/, ""),
+        secure: true,
+      },
     },
   },
   resolve: {

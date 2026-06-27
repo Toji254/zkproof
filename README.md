@@ -191,8 +191,11 @@ Recommended sequence:
 ./scripts/build.sh
 ./scripts/deploy.sh
 ./scripts/update-vk.sh
+./scripts/check-vk-status.sh
 ./scripts/test-flow.sh
 ```
+
+`node frontend/scripts/gen-vk.mjs` now uses the keccak UltraHonk VK path that matches the Soroban verifier and writes the expected 1760 raw bytes to `circuits/target/vk.bin`. If the helper still fails, open the frontend at `/ops`, use `Export Verification Key`, save the downloaded file to `circuits/target/vk.bin`, and re-run `./scripts/update-vk.sh`.
 
 See [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md) for the deployment checklist and expected outputs.
 

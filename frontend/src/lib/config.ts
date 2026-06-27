@@ -20,12 +20,26 @@ export const NETWORK_PASSPHRASE =
     ? "Test SDF Network ; September 2015"
     : "Public Global Stellar Network ; September 2015";
 
-export const RPC_URL =
-  NETWORK === "TESTNET"
+// In development the Vite dev server proxies these paths to the real hosts
+// (see vite.config.ts server.proxy). This avoids COEP 'require-corp' blocking
+// direct cross-origin fetches to third-party RPC/Horizon endpoints.
+// We use the fully-qualified origin so the Stellar SDK can parse the URL.
+const isDev =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
+const devOrigin =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+
+export const RPC_URL = isDev
+  ? `${devOrigin}/soroban-rpc`
+  : NETWORK === "TESTNET"
     ? "https://soroban-testnet.stellar.org"
     : "https://soroban-mainnet.stellar.org";
 
-export const HORIZON_URL =
-  NETWORK === "TESTNET"
+export const HORIZON_URL = isDev
+  ? `${devOrigin}/horizon-api`
+  : NETWORK === "TESTNET"
     ? "https://horizon-testnet.stellar.org"
     : "https://horizon.stellar.org";

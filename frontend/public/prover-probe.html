@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <body style="background:#111;color:#eee;font-family:monospace;white-space:pre-wrap">
+    <div id="out">running…</div>
+    <script type="module">
+      const out = document.getElementById('out');
+      const log = [];
+      try {
+        const circuit = await (await fetch('/zkproof.json')).json();
+        log.push({ step: 'circuit', ok: !!circuit?.bytecode, bytecodeLen: circuit?.bytecode?.length ?? null });
+        const { Noir } = await import('@noir-lang/noir_js');
+        const { UltraHonkBackend } = await import('@aztec/bb.js');
+        const { poseidon2 } = await import('poseidon-lite');
+        const commitment = poseidon2([42n, 5000n]);
+        log.push({ step: 'commitment', commitment: commitment.toString() });
+        const noir = new Noir(circuit);
+        const exec = await noir.execute({
+          monthly_income: '5000',
+          data_source_secret: '42',
+          minimum_threshold: '3000',
+          attestation_type: '1',
+          timestamp: '1750000000',
+          data_commitment: commitment.toString(),
+        });
+        log.push({ step: 'execute', keys: Object.keys(exec), witnessLen: exec.witness?.length ?? null });
+        const backend = new UltraHonkBackend(circuit.bytecode);
+        log.push({ step: 'backend-init', ok: true });
+        const proof = await backend.generateProof(exec.witness);
+        log.push({ step: 'generate-proof', keys: Object.keys(proof), proofLen: proof.proof?.length ?? null });
+        out.textContent = JSON.stringify({ ok: true, log }, null, 2);
+      } catch (err) {
+        out.textContent = JSON.stringify({ ok: false, log, error: String(err), stack: err?.stack || null }, null, 2);
+        console.error(err);
+      }
+    </script>
+  </body>
+</html>

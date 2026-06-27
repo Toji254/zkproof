@@ -18,12 +18,13 @@
 // so the dev server boots instantly. Subsequent calls reuse the cached module.
 
 import { poseidon2 as poseidonHash2 } from "poseidon-lite";
-import { decompressSync as gunzip } from "fflate";
+
+const EXPECTED_ONCHAIN_VK_BYTES = 1760;
 
 export interface ProverInputs {
   attestationType: "income" | "balance" | "credit";
-  threshold: number; // u64
-  privateValue: number; // the secret (e.g. income / balance / credit score)
+  threshold: bigint | number; // u64
+  privateValue: bigint | number; // the secret (e.g. income / balance / credit score)
   dataSourceSecret: number; // field element used in the commitment
 }
 
@@ -81,9 +82,9 @@ async function ensureInit(): Promise<void> {
  */
 async function computePoseidonCommitmentBN254(
   secret: number,
-  value: number,
+  value: bigint | number,
 ): Promise<bigint> {
-  return poseidonHash2([BigInt(secret), BigInt(value)]);
+  return poseidonHash2([BigInt(secret), toBigInt(value, "private value")]);
 }
 
 /**
@@ -92,11 +93,13 @@ async function computePoseidonCommitmentBN254(
 export async function generateProof(inputs: ProverInputs): Promise<ProverOutput> {
   const t0 = performance.now();
   await ensureInit();
+  const thresholdBigInt = toBigInt(inputs.threshold, "threshold");
+  const privateValueBigInt = toBigInt(inputs.privateValue, "private value");
 
   // 1. Compute the Poseidon commitment the circuit expects.
   const commitment = await computePoseidonCommitmentBN254(
     inputs.dataSourceSecret,
-    inputs.privateValue,
+    privateValueBigInt,
   );
 
   // 2. Build the full witness
@@ -110,37 +113,33 @@ export async function generateProof(inputs: ProverInputs): Promise<ProverOutput>
 
   const noir = new noirModule.Noir(circuitArtifact);
   const { witness } = await noir.execute({
-    monthly_income: String(inputs.privateValue),
+    monthly_income: privateValueBigInt.toString(),
     data_source_secret: String(inputs.dataSourceSecret),
-    minimum_threshold: String(inputs.threshold),
+    minimum_threshold: thresholdBigInt.toString(),
     attestation_type: String(attTypeNum),
     timestamp: String(ts),
     data_commitment: commitment.toString(),
   });
 
-  // 3. Generate the UltraHonk proof. We bypass UltraHonkBackend.generateProof()
-  // here because it internally re-computes the VK to infer the public-input
-  // count, and VK generation is flaky in our current bb.js environment. The
-  // circuit has a fixed 4 public inputs, so we can split the proof bundle
-  // directly without touching VK generation.
-  const backendAny = ultraHonkBackend as any;
-  await backendAny.instantiate();
-  const proofWithPublicInputs = await backendAny.api.acirProveUltraHonk(
-    backendAny.acirUncompressedBytecode,
-    gunzip(witness),
-  );
-  const { proof: splitProof } = bbModule.splitHonkProof(proofWithPublicInputs, 4);
+  // 3. Generate a keccak UltraHonk proof. The Soroban verifier and the upstream
+  // bb CLI fixtures both use the keccak transcript; the default UltraHonk mode
+  // verifies locally in bb.js but fails on-chain with SumcheckFailed.
+  const proofData = await ultraHonkBackend.generateProof(witness, {
+    keccak: true,
+  });
 
   // 4. Package the 4 public inputs as 32-byte big-endian fields
   const publicInputs = new Uint8Array(128);
-  writeField(publicInputs, 0, BigInt(inputs.threshold));
+  writeField(publicInputs, 0, thresholdBigInt);
   writeField(publicInputs, 32, BigInt(attTypeNum));
   writeField(publicInputs, 64, BigInt(ts));
   writeField(publicInputs, 96, commitment);
 
-  // 5. The proof is in splitProof (a Uint8Array). Serialize to hex for display.
+  // 5. Serialize the proof bytes to hex for display.
   const proofBytes: Uint8Array =
-    splitProof instanceof Uint8Array ? splitProof : new Uint8Array(splitProof);
+    proofData.proof instanceof Uint8Array
+      ? proofData.proof
+      : new Uint8Array(proofData.proof);
 
   // 6. We do not need the VK for normal browser proving; the UI only needs the
   //    proof bytes + public inputs. VK extraction remains available through the
@@ -162,7 +161,10 @@ export async function generateProof(inputs: ProverInputs): Promise<ProverOutput>
 export async function getVerificationKey(): Promise<Uint8Array> {
   await ensureInit();
   if (!cachedVK) {
-    cachedVK = await ultraHonkBackend.getVerificationKey();
+    const rawVk = await ultraHonkBackend.getVerificationKey({ keccak: true });
+    cachedVK = normalizeVerificationKey(
+      rawVk instanceof Uint8Array ? rawVk : new Uint8Array(rawVk),
+    );
   }
   return cachedVK!;
 }
@@ -173,7 +175,7 @@ export async function getVerificationKey(): Promise<Uint8Array> {
  */
 export async function computeCommitment(
   dataSourceSecret: number,
-  value: number,
+  value: bigint | number,
 ): Promise<string> {
   await ensureInit();
   const c = await computePoseidonCommitmentBN254(dataSourceSecret, value);
@@ -182,9 +184,11 @@ export async function computeCommitment(
 
 export async function debugGenerateProof(inputs: ProverInputs): Promise<Record<string, unknown>> {
   await ensureInit();
+  const thresholdBigInt = toBigInt(inputs.threshold, "threshold");
+  const privateValueBigInt = toBigInt(inputs.privateValue, "private value");
   const commitment = await computePoseidonCommitmentBN254(
     inputs.dataSourceSecret,
-    inputs.privateValue,
+    privateValueBigInt,
   );
   const ts = Math.floor(Date.now() / 1000);
   const attTypeNum =
@@ -196,34 +200,35 @@ export async function debugGenerateProof(inputs: ProverInputs): Promise<Record<s
 
   const noir = new noirModule.Noir(circuitArtifact);
   const exec = await noir.execute({
-    monthly_income: String(inputs.privateValue),
+    monthly_income: privateValueBigInt.toString(),
     data_source_secret: String(inputs.dataSourceSecret),
-    minimum_threshold: String(inputs.threshold),
+    minimum_threshold: thresholdBigInt.toString(),
     attestation_type: String(attTypeNum),
     timestamp: String(ts),
     data_commitment: commitment.toString(),
   });
 
-  const backendAny = ultraHonkBackend as any;
-  await backendAny.instantiate();
-  const proofWithPublicInputs = await backendAny.api.acirProveUltraHonk(
-    backendAny.acirUncompressedBytecode,
-    gunzip(exec.witness),
-  );
-  const { proof: splitProof } = bbModule.splitHonkProof(proofWithPublicInputs, 4);
+  const proofData = await ultraHonkBackend.generateProof(exec.witness, {
+    keccak: true,
+  });
 
   return {
     commitment: commitment.toString(),
     witnessLength: exec.witness?.length ?? null,
-    proofLength: splitProof instanceof Uint8Array ? splitProof.length : splitProof?.length ?? null,
+    proofLength:
+      proofData.proof instanceof Uint8Array
+        ? proofData.proof.length
+        : proofData.proof?.length ?? null,
   };
 }
 
 export async function debugWitnessOnly(inputs: ProverInputs): Promise<Record<string, unknown>> {
   await ensureInit();
+  const thresholdBigInt = toBigInt(inputs.threshold, "threshold");
+  const privateValueBigInt = toBigInt(inputs.privateValue, "private value");
   const commitment = await computePoseidonCommitmentBN254(
     inputs.dataSourceSecret,
-    inputs.privateValue,
+    privateValueBigInt,
   );
   const ts = Math.floor(Date.now() / 1000);
   const attTypeNum =
@@ -235,9 +240,9 @@ export async function debugWitnessOnly(inputs: ProverInputs): Promise<Record<str
 
   const noir = new noirModule.Noir(circuitArtifact);
   const exec = await noir.execute({
-    monthly_income: String(inputs.privateValue),
+    monthly_income: privateValueBigInt.toString(),
     data_source_secret: String(inputs.dataSourceSecret),
-    minimum_threshold: String(inputs.threshold),
+    minimum_threshold: thresholdBigInt.toString(),
     attestation_type: String(attTypeNum),
     timestamp: String(ts),
     data_commitment: commitment.toString(),
@@ -253,8 +258,42 @@ export async function debugWitnessOnly(inputs: ProverInputs): Promise<Record<str
 export async function debugVerificationKey(): Promise<Record<string, unknown>> {
   await ensureInit();
   const backend = new bbModule.UltraHonkBackend(circuitArtifact.bytecode);
-  const vk = await backend.getVerificationKey();
-  return { vkLength: vk.length };
+  const vk = await backend.getVerificationKey({ keccak: true });
+  const normalizedVk = normalizeVerificationKey(
+    vk instanceof Uint8Array ? vk : new Uint8Array(vk),
+  );
+  return { vkLength: vk.length, normalizedVkLength: normalizedVk.length };
+}
+
+function normalizeVerificationKey(vk: Uint8Array): Uint8Array {
+  // bb.js v0.87 layout reference:
+  //   getVerificationKey({ keccak: true }) -> 1760 bytes (clean VK)
+  //   getVerificationKey()                -> 1764 bytes (header + 4 padding + body)
+  // The Soroban Nethermind verifier expects the 1760-byte keccak VK directly.
+  // Earlier code trimmed the last 4 bytes of the default VK and assumed that
+  // produced a clean layout; in bb.js 0.87 the 4 extra bytes are a padding word
+  // inserted RIGHT AFTER the 32-byte header, so trimming the tail instead leaves
+  // garbage in every G1 point. We always fetch the keccak VK now, which is
+  // already the correct 1760 bytes — so this function is effectively a pass-through
+  // with a defensive length check.
+  if (vk.length === EXPECTED_ONCHAIN_VK_BYTES) {
+    return vk;
+  }
+  throw new Error(
+    `Unexpected verification key length: ${vk.length} bytes ` +
+      `(expected ${EXPECTED_ONCHAIN_VK_BYTES}). ` +
+      `Did you forget { keccak: true } when calling getVerificationKey()?`,
+  );
+}
+
+function toBigInt(value: bigint | number, label: string): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (!Number.isInteger(value)) {
+    throw new Error(`${label} must be an integer before proof generation.`);
+  }
+  return BigInt(value);
 }
 
 function writeField(buf: Uint8Array, offset: number, value: bigint): void {

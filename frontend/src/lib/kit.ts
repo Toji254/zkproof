@@ -16,6 +16,10 @@ export function ensureKit(): void {
     network: Networks.TESTNET,
     modules: defaultModules(),
   });
+  const walletId = typeof window !== 'undefined' ? localStorage.getItem('zkproof_connected_wallet_id') : null;
+  if (walletId) {
+    StellarWalletsKit.setWallet(walletId);
+  }
   initDone = true;
 }
 

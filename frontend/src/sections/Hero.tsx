@@ -230,11 +230,11 @@ export default function Hero({
           {/* Interactive CTAs */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '48px' }}>
             <Link
-              to="/facility/enter-data"
+              to="/prove"
               className="btn-zk btn-zk-primary"
               style={{ fontSize: '11px', padding: '12px 24px' }}
             >
-              Start renter proof
+              Prove Qualification
             </Link>
             <Link
               to="/facility/verify"
@@ -242,7 +242,7 @@ export default function Hero({
               className="btn-zk btn-zk-outline"
               style={{ fontSize: '11px', padding: '12px 24px' }}
             >
-              Landlord verify
+              Landlord Verify
             </Link>
           </div>
 

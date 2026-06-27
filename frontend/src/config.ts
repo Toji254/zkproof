@@ -99,8 +99,8 @@ export const navigationConfig: NavigationConfig = {
   links: [
     { label: "Why", href: "/#manifesto" },
     { label: "How It Works", href: "/#facilities" },
+    { label: "Prove", href: "/prove" },
     { label: "Landlord Verify", href: "/facility/verify" },
-    { label: "Tech", href: "/#archives" },
   ],
 }
 
@@ -139,8 +139,8 @@ export const facilitiesConfig: FacilitiesConfig = {
       status: "Private — the renter's raw data never leaves the device",
       email: "Renter enters income, balance, or credit data locally",
       phone: "Output: a private commitment tied to this session",
-      ctaText: "Start renter proof",
-      ctaHref: "/facility/enter-data",
+      ctaText: "Prove qualification",
+      ctaHref: "/prove",
       image: "/images/step1-data.jpg",
       utcOffset: 0,
       article: {
@@ -160,8 +160,8 @@ export const facilitiesConfig: FacilitiesConfig = {
       status: "Browser-side proof generation with Noir + Barretenberg",
       email: "Input: renter data + landlord threshold",
       phone: "Output: zero-knowledge proof + public attestation inputs",
-      ctaText: "Generate renter proof",
-      ctaHref: "/facility/generate-proof",
+      ctaText: "Prove qualification",
+      ctaHref: "/prove",
       image: "/images/step2-proof.jpg",
       utcOffset: 0,
       article: {
@@ -181,8 +181,8 @@ export const facilitiesConfig: FacilitiesConfig = {
       status: "Stellar testnet attestation with 90-day validity",
       email: "Input: proof + attestation inputs",
       phone: "Output: tamper-proof qualification record",
-      ctaText: "Issue attestation",
-      ctaHref: "/facility/on-chain-attestation",
+      ctaText: "Prove qualification",
+      ctaHref: "/prove",
       image: "/images/step3-chain.jpg",
       utcOffset: 0,
       article: {

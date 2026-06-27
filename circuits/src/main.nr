@@ -39,13 +39,6 @@ fn main(
     assert(income_val > threshold_val, "Income must exceed the minimum threshold");
 
     // -------------------------------------------------------
-    // CONSTRAINT 2: Income is within a reasonable range
-    // -------------------------------------------------------
-    // Prevents overflow attacks and ensures the value is sensible
-    // Max monthly income capped at $10,000,000 (10M) - covers any real scenario
-    assert(income_val < 10_000_000, "Income must be within reasonable range");
-
-    // -------------------------------------------------------
     // CONSTRAINT 3: Threshold is positive and reasonable
     // -------------------------------------------------------
     assert(threshold_val > 0, "Threshold must be positive");
@@ -56,6 +49,20 @@ fn main(
     let att_type = attestation_type as u64;
     assert(att_type >= 1, "Attestation type must be >= 1");
     assert(att_type <= 3, "Attestation type must be <= 3");
+
+    // -------------------------------------------------------
+    // CONSTRAINT 2: Value is within a reasonable range for its type
+    // -------------------------------------------------------
+    if att_type == 1 {
+        // Income: max $10,000,000 / month
+        assert(income_val < 10_000_000, "Income must be within reasonable range");
+    } else if att_type == 2 {
+        // Balance: max 100,000,000 XLM scaled by 10^7
+        assert(income_val < 1_000_000_000_000_000, "Balance must be within reasonable range");
+    } else {
+        // Credit: credit score cannot exceed 850
+        assert(income_val <= 850, "Credit score must be within reasonable range");
+    }
 
     // -------------------------------------------------------
     // CONSTRAINT 5: Timestamp is reasonable (after 2024)

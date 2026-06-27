@@ -55,12 +55,11 @@ open('$PLACEHOLDER_VK','wb').write(bytes(1760))
 echo "✅ Placeholder VK: $PLACEHOLDER_VK"
 
 # 1. Deploy (constructor args after `--`)
-VK_HEX=$(xxd -p -c 100000 "$PLACEHOLDER_VK" | tr -d '\n')
 CID=$(stellar contract deploy \
   --wasm "$WASM" \
   --source-account "$IDENTITY_NAME" \
   --network "$NETWORK" \
-  -- --admin "$PUB_KEY" --vk "$VK_HEX")
+  -- --admin "$PUB_KEY" --vk-file-path "$PLACEHOLDER_VK")
 echo "✅ Deployed: $CID"
 
 # 2. The contract was initialized by the constructor during deploy.

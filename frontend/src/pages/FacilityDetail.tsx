@@ -9,6 +9,7 @@ import {
   type WalletAssetBalance,
 } from '../lib/stellar';
 import { computeCommitment, generateProof } from '../lib/prover';
+import { formatChainThresholdForDisplay, normalizeAttestationInput } from '../lib/attestationMath';
 import type { ZkState } from '../App';
 
 interface FacilityDetailProps {
@@ -23,7 +24,7 @@ type VerificationResult =
       valid: true;
       address: string;
       type: string;
-      threshold: number;
+      threshold: string;
       issuedAt: string;
       expiresAt: string;
       proofHash: string;
@@ -81,7 +82,7 @@ export default function FacilityDetail({
     if (walletAddress && !formData.verifyAddress) {
       setFormData(prev => ({ ...prev, verifyAddress: walletAddress }));
     }
-  }, [walletAddress]);
+  }, [walletAddress, formData.verifyAddress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +148,7 @@ export default function FacilityDetail({
     return () => {
       cancelled = true;
     };
-  }, [walletAddress, zkState.selectedAssetId, zkState.attestationType]);
+  }, [walletAddress, zkState.selectedAssetId, zkState.attestationType, setZkState]);
 
   useEffect(() => {
     if (formData.attestationType !== 'balance' || !selectedWalletAsset) return;
@@ -234,6 +235,8 @@ export default function FacilityDetail({
     addLog('Preparing the private proof engine (one-time prover download on first run)...');
 
     try {
+      const normalizedValue = normalizeAttestationInput(formData.attestationType, val, 'your private value');
+
       setProgress(30);
       addLog(`Preparing a private qualification check for ${formData.attestationType} = ${val}...`);
       if (formData.attestationType === 'balance' && selectedWalletAsset) {
@@ -249,7 +252,7 @@ export default function FacilityDetail({
       setProgress(70);
       const commitmentHex = await computeCommitment(
         dataSourceSecret,
-        Number(val),
+        normalizedValue,
       );
       addLog(`Private commitment computed locally in the browser.`);
 
@@ -288,10 +291,10 @@ export default function FacilityDetail({
 
     const val =
       formData.attestationType === 'income'
-        ? Number(zkState.income)
+        ? zkState.income
         : formData.attestationType === 'balance'
-          ? Number(zkState.balance)
-          : Number(zkState.creditScore);
+          ? zkState.balance
+          : zkState.creditScore;
     const dataSourceSecret = zkState.publicInputs?.[4]
       ? Number(zkState.publicInputs[4])
       : 0;
@@ -302,14 +305,17 @@ export default function FacilityDetail({
     addLog('Loading the browser proof engine...');
 
     try {
+      const normalizedPrivateValue = normalizeAttestationInput(zkState.attestationType, val, 'your private value');
+      const normalizedThreshold = normalizeAttestationInput(zkState.attestationType, formData.threshold, 'the landlord threshold');
+
       setProgress(30);
       addLog('Executing the qualification circuit locally...');
 
       setProgress(60);
       const result = await generateProof({
         attestationType: zkState.attestationType,
-        threshold: Number(formData.threshold),
-        privateValue: val,
+        threshold: normalizedThreshold,
+        privateValue: normalizedPrivateValue,
         dataSourceSecret,
       });
 
@@ -333,7 +339,7 @@ export default function FacilityDetail({
         threshold: formData.threshold,
         proof: result.proofHex,
         publicInputs: [
-          formData.threshold,
+          normalizedThreshold.toString(),
           zkState.attestationType,
           String(result.timestamp),
           result.commitmentHex,
@@ -438,7 +444,7 @@ export default function FacilityDetail({
           valid: true,
           address: normalizedVerifyAddress,
           type: attestation.attestationType,
-          threshold: attestation.threshold,
+          threshold: formatChainThresholdForDisplay(attestation.attestationType, attestation.threshold),
           issuedAt: new Date(attestation.issuedAt * 1000).toLocaleString(),
           expiresAt: new Date(attestation.expiresAt * 1000).toLocaleString(),
           proofHash: attestation.proofHash,
@@ -449,10 +455,15 @@ export default function FacilityDetail({
       }
     } catch (err: any) {
       console.error(err);
-      const error =
-        err?.message === 'Network Error'
-          ? 'Could not reach Soroban testnet RPC. Check your network or the RPC endpoint and try again.'
-          : err?.message ?? 'Verification query failed.';
+      const msg: string = err?.message ?? '';
+      const isNetworkError =
+        msg === 'Network Error' ||
+        msg.toLowerCase().includes('failed to fetch') ||
+        msg.toLowerCase().includes('networkerror') ||
+        msg.toLowerCase().includes('load failed');
+      const error = isNetworkError
+        ? 'Could not reach the Soroban RPC. If you are running locally, restart the dev server so the Vite proxy picks up the new config.'
+        : msg || 'Verification query failed.';
       addLog(`Error: ${error}`);
       setVerificationResult({ valid: false, error });
     } finally {
@@ -1036,7 +1047,7 @@ export default function FacilityDetail({
                             </tr>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
                               <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Requirement proven:</td>
-                              <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', fontWeight: 600 }}>${verificationResult.threshold}</td>
+                              <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', fontWeight: 600 }}>{verificationResult.threshold}</td>
                             </tr>
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
                               <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Issued:</td>

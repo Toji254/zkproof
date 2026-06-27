@@ -43,3 +43,7 @@ frontend/.vercel/
 
 # Keep the deployed contract ID tracked
 !.contract-id
+
+# Hermes agent / local debug artifacts
+.hermes/
+tmp-noir-debug/

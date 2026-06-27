@@ -3,12 +3,22 @@ import {
   isAllowed as isFreighterAllowed,
   isConnected as isFreighterConnected,
   requestAccess as requestFreighterAccess,
+  signTransaction as signFreighterTransaction,
 } from "@stellar/freighter-api";
 import { StellarWalletsKit, ensureKit } from "./kit";
 
 function getKit(): typeof StellarWalletsKit {
   ensureKit();
   return StellarWalletsKit;
+}
+
+function extractFreighterAddress(result: unknown): string | null {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  const maybeAddress = (result as { address?: unknown } | null)?.address;
+  return typeof maybeAddress === "string" ? maybeAddress : null;
 }
 
 export interface WalletOption {
@@ -211,30 +221,30 @@ export async function listAvailableWallets(): Promise<WalletOption[]> {
  * `{ address }` on success or throws.
  */
 export async function connectWithWallet(moduleId: string): Promise<string> {
-  // Set the active wallet module; this also kicks the wallet extension to
-  // surface its permission/connection modal.
   const kit = getKit();
   StellarWalletsKit.setWallet(moduleId);
+  localStorage.setItem('zkproof_connected_wallet_id', moduleId);
 
   if (moduleId === "freighter") {
-    const installed = await detectFreighterInstalled();
-    if (!installed) {
-      throw new Error("Freighter is not installed in this browser.");
-    }
-
+    // Freighter's direct API grants site access without going through the
+    // wallet-kit module's stricter `isConnected()` guard.
     try {
-      const address = await requestFreighterAccess();
-      if (address) return address;
+      const addr = extractFreighterAddress(await requestFreighterAccess());
+      if (addr && addr.length > 10) return addr;
     } catch {
-      // Fall through to the kit fetch path after access prompt.
+      // fall through to kit path
     }
   }
 
-  const { address } = await kit.fetchAddress();
-  if (!address) {
-    throw new Error("Wallet connection returned no address.");
+  // kit.fetchAddress() works for all wallet types and handles the popup
+  try {
+    const { address } = await kit.fetchAddress();
+    if (address) return address;
+  } catch (e: any) {
+    throw new Error(e?.message ?? "Wallet connection failed.");
   }
-  return address;
+
+  throw new Error("Wallet connection returned no address.");
 }
 
 /**
@@ -245,6 +255,32 @@ export async function signWithKit(
   address: string,
   networkPassphrase: string,
 ): Promise<string> {
+  const walletId = localStorage.getItem('zkproof_connected_wallet_id');
+
+  if (walletId === "freighter") {
+    try {
+      await requestFreighterAccess();
+    } catch {
+      // Freighter may already be approved; proceed to signing.
+    }
+
+    const signedTxXdr = await signFreighterTransaction(xdr, {
+      networkPassphrase,
+      accountToSign: address,
+    });
+
+    if (!signedTxXdr) {
+      throw new Error(
+        "Wallet signing was cancelled or failed.",
+      );
+    }
+
+    return signedTxXdr;
+  }
+
+  if (walletId) {
+    StellarWalletsKit.setWallet(walletId);
+  }
   const result: any = await getKit().signTransaction(xdr, {
     networkPassphrase,
     address,

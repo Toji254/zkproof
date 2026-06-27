@@ -53,11 +53,28 @@ echo
 echo "==> 3. get_attestation(user, income) for fresh user (should be absent):"
 invoke get_attestation --address "$USER" --attestation_type income || true
 
-# 4. VK roundtrip — the VK stored at deploy time
+# 4. Verification-key status — fail loudly if the contract still holds the
+# placeholder zeros. A real attestation demo is not trustworthy until this is
+# replaced with the circuit's real VK.
 echo
-echo "==> 4. get_verification_key() length:"
-invoke get_verification_key | head -c 80
-echo
+echo "==> 4. verification key status:"
+set +e
+VK_STATUS_OUTPUT="$($SCRIPT_DIR/check-vk-status.sh 2>&1)"
+VK_STATUS_EXIT=$?
+set -e
+echo "$VK_STATUS_OUTPUT"
+if [ $VK_STATUS_EXIT -eq 2 ]; then
+  echo "❌ Placeholder VK is still deployed. Export a real VK from /ops or fix the generator, then run ./scripts/update-vk.sh."
+  exit 1
+fi
+if [ $VK_STATUS_EXIT -eq 3 ]; then
+  echo "❌ The deployed VK length is wrong. A hex-encoded blob was likely uploaded instead of raw verifier bytes. Redeploy or re-upload with ./scripts/update-vk.sh after generating a 1760-byte VK."
+  exit 1
+fi
+if [ $VK_STATUS_EXIT -ne 0 ]; then
+  echo "❌ Could not verify the deployed VK status."
+  exit $VK_STATUS_EXIT
+fi
 
 echo
 echo "✅ Smoke test passed. The contract is live and responsive on testnet."

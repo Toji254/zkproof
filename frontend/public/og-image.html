@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>zkProof OG Image</title>
+    <style>
+      :root {
+        --bg-primary: #050a0f;
+        --bg-secondary: #0a1118;
+        --bg-card: rgba(13, 22, 32, 0.88);
+        --accent: #00d4aa;
+        --accent-dim: #00b894;
+        --text-primary: #e8ecf1;
+        --text-secondary: #8899aa;
+        --border: rgba(136, 153, 170, 0.14);
+        --border-accent: rgba(0, 212, 170, 0.28);
+        --glow: rgba(0, 212, 170, 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: "Inter", "IBM Plex Mono", "Segoe UI", sans-serif;
+      }
+
+      body {
+        position: relative;
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+        background:
+          radial-gradient(circle at 18% 20%, rgba(0, 212, 170, 0.16) 0, transparent 34%),
+          radial-gradient(circle at 82% 76%, rgba(0, 96, 255, 0.12) 0, transparent 30%),
+          linear-gradient(135deg, #050a0f 0%, #08111a 45%, #050a0f 100%);
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(136, 153, 170, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(136, 153, 170, 0.05) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(circle at center, black 48%, transparent 100%);
+        opacity: 0.38;
+      }
+
+      .frame {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 44px;
+      }
+
+      .panel {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 48px 56px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(10, 17, 24, 0.92), rgba(5, 10, 15, 0.96));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.03),
+          0 24px 80px rgba(0, 0, 0, 0.45),
+          0 0 0 1px rgba(0, 212, 170, 0.05);
+        overflow: hidden;
+      }
+
+      .panel::before {
+        content: "";
+        position: absolute;
+        inset: 18px;
+        border: 1px solid rgba(0, 212, 170, 0.08);
+        pointer-events: none;
+      }
+
+      .topbar,
+      .footer {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .eyebrow,
+      .footer-copy {
+        font-size: 16px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border: 1px solid var(--border-accent);
+        border-radius: 999px;
+        background: rgba(0, 212, 170, 0.08);
+        color: var(--accent);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        box-shadow: 0 0 30px rgba(0, 212, 170, 0.08);
+      }
+
+      .badge-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 14px var(--glow);
+      }
+
+      .hero {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .left {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .mark {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .mark-icon {
+        width: 88px;
+        height: 88px;
+        border-radius: 24px;
+        border: 1px solid var(--border-accent);
+        background:
+          radial-gradient(circle at 30% 30%, rgba(0, 212, 170, 0.16), transparent 52%),
+          linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(13, 22, 32, 0.9));
+        display: grid;
+        place-items: center;
+        box-shadow: inset 0 0 20px rgba(0, 212, 170, 0.06);
+      }
+
+      .mark-icon span {
+        font-size: 34px;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: 0.04em;
+      }
+
+      .wordmark {
+        font-size: 92px;
+        line-height: 0.9;
+        letter-spacing: -0.05em;
+        font-weight: 800;
+        margin: 0;
+      }
+
+      .tagline {
+        margin: 0;
+        font-size: 38px;
+        line-height: 1.16;
+        color: var(--text-primary);
+        max-width: 760px;
+        font-weight: 600;
+      }
+
+      .subcopy {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 21px;
+        line-height: 1.6;
+        max-width: 700px;
+      }
+
+      .right {
+        position: relative;
+        align-self: stretch;
+        min-height: 320px;
+        border: 1px solid var(--border);
+        background:
+          linear-gradient(180deg, rgba(13, 22, 32, 0.9), rgba(8, 14, 21, 0.82));
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .right::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 68% 28%, rgba(0, 212, 170, 0.2) 0, transparent 26%),
+          radial-gradient(circle at 35% 72%, rgba(31, 78, 255, 0.18) 0, transparent 24%);
+        pointer-events: none;
+      }
+
+      .right-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid rgba(0, 212, 170, 0.18);
+        background: rgba(0, 212, 170, 0.06);
+        color: var(--accent);
+      }
+
+      .proof-stack {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .proof-row {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 14px;
+        align-items: center;
+        font-size: 15px;
+      }
+
+      .proof-label {
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .proof-value {
+        padding: 12px 14px;
+        border: 1px solid rgba(136, 153, 170, 0.1);
+        background: rgba(5, 10, 15, 0.72);
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .verdict {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px;
+        border: 1px solid var(--border-accent);
+        background: rgba(0, 212, 170, 0.08);
+      }
+
+      .verdict strong {
+        font-size: 28px;
+        letter-spacing: -0.02em;
+      }
+
+      .verdict small {
+        color: var(--text-secondary);
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .footer-copy strong {
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .watermark {
+        font-size: 16px;
+        color: rgba(232, 236, 241, 0.42);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <section class="panel">
+        <div class="topbar">
+          <div class="eyebrow">Zero-knowledge financial attestation protocol</div>
+          <div class="badge"><span class="badge-dot"></span>Built on Stellar</div>
+        </div>
+
+        <div class="hero">
+          <div class="left">
+            <div class="mark">
+              <div class="mark-icon"><span>zk</span></div>
+              <h1 class="wordmark">zkProof</h1>
+            </div>
+            <p class="tagline">Prove It. Without Showing It.</p>
+            <p class="subcopy">
+              Privacy-preserving eligibility checks for income, balance, and financial trust — using Noir circuits,
+              client-side proving, and Soroban verification on Stellar.
+            </p>
+          </div>
+
+          <aside class="right">
+            <div class="right-header">
+              <span>Attestation preview</span>
+              <span class="chip">Live on testnet</span>
+            </div>
+
+            <div class="proof-stack">
+              <div class="proof-row">
+                <div class="proof-label">Claim</div>
+                <div class="proof-value">Income exceeds 3,000 USD / month</div>
+              </div>
+              <div class="proof-row">
+                <div class="proof-label">Proof</div>
+                <div class="proof-value">UltraHonk + BN254 pairing verification</div>
+              </div>
+              <div class="proof-row">
+                <div class="proof-label">Output</div>
+                <div class="proof-value">YES / NO attestation with expiry, no raw financial data revealed</div>
+              </div>
+            </div>
+
+            <div class="verdict">
+              <div>
+                <small>Verifier sees</small>
+                <strong>Eligible ✓</strong>
+              </div>
+              <small>Private data stays local</small>
+            </div>
+          </aside>
+        </div>
+
+        <div class="footer">
+          <div class="footer-copy">Noir · Soroban · BN254 · <strong>Privacy by default</strong></div>
+          <div class="watermark">1200 × 630 social preview</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

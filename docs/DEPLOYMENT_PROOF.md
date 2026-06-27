@@ -13,6 +13,14 @@
 
 - `scripts/update-vk.sh` uploads the real VK produced from the compiled Noir circuit
 - `circuits/target/vk.bin` must exist before the upload step
+- `./scripts/check-vk-status.sh` tells you whether the contract still holds the zero-byte placeholder or an invalid-length upload
+- `node frontend/scripts/gen-vk.mjs` uses the keccak UltraHonk VK path, which matches the Soroban verifier and writes the expected 1760 raw bytes
+- if the Node generator still fails, open the frontend at `/ops` and use `Export Verification Key`
+
+Current guardrails:
+- the Soroban verifier expects exactly `1760` raw VK bytes
+- the browser prover and VK export now use keccak UltraHonk so their transcript matches the Soroban verifier
+- a `3680`-byte upload means hex text was stored instead of the raw verifier key
 
 ## Recommended deployment sequence
 
@@ -69,7 +77,7 @@ Expected result:
 - contract is deployed to Stellar testnet
 
 `./scripts/update-vk.sh`
-- VK upload succeeds against the deployed contract
+- VK upload succeeds against the deployed contract with a 1760-byte raw verifier key
 
 `./scripts/test-flow.sh`
 - read-only smoke checks pass against the live contract

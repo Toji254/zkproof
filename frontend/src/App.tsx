@@ -8,7 +8,10 @@ import Observation from './sections/Observation';
 import Archives from './sections/Archives';
 import Footer from './sections/Footer';
 import FacilityDetail from './pages/FacilityDetail';
+import OpsTools from './pages/OpsTools';
+import ProveAttest from './pages/ProveAttest';
 import WalletPicker from './components/WalletPicker';
+import DemoTour from './components/DemoTour';
 import { setConnectedAddress as setStellarAddress, disconnectWallet } from './lib/stellar';
 
 export interface ZkState {
@@ -76,6 +79,7 @@ function Home({
         <Archives />
       </main>
       <Footer />
+      <DemoTour walletAddress={walletAddress} />
     </>
   );
 }
@@ -131,6 +135,21 @@ function App() {
           }
         />
         <Route
+          path="/prove"
+          element={
+            <ProveAttest
+              walletAddress={walletAddress}
+              connectWallet={handleConnect}
+              zkState={zkState}
+              setZkState={setZkState}
+            />
+          }
+        />
+        {/* Legacy step routes → unified prove page */}
+        <Route path="/facility/enter-data" element={<ProveAttest walletAddress={walletAddress} connectWallet={handleConnect} zkState={zkState} setZkState={setZkState} />} />
+        <Route path="/facility/generate-proof" element={<ProveAttest walletAddress={walletAddress} connectWallet={handleConnect} zkState={zkState} setZkState={setZkState} />} />
+        <Route path="/facility/on-chain-attestation" element={<ProveAttest walletAddress={walletAddress} connectWallet={handleConnect} zkState={zkState} setZkState={setZkState} />} />
+        <Route
           path="/facility/:slug"
           element={
             <FacilityDetail
@@ -141,6 +160,7 @@ function App() {
             />
           }
         />
+        <Route path="/ops" element={<OpsTools />} />
       </Routes>
 
       <WalletPicker
