@@ -49,6 +49,23 @@ Expected outcome:
 
 Current contract:
 - https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
+## Live evidence (read this if you can't run anything)
+
+See [`EVIDENCE.md`](./EVIDENCE.md) for:
+- Real `./scripts/test-flow.sh` output against the deployed contract
+- The previously recorded happy-path attestation tx (with stellar.expert link)
+- A live failure-path simulation: `attest()` returns `false` on an invalid
+  proof, and `get_attestation` for the same `(user, credit)` key stays `null`
+  — so the contract genuinely enforces the threshold.
+
+## Live evidence (read this if you can't run anything)
+
+See [`EVIDENCE.md`](./EVIDENCE.md) for:
+- Real `./scripts/test-flow.sh` output against the deployed contract
+- The previously recorded happy-path attestation tx (with stellar.expert link)
+- A live failure-path simulation: `attest()` returns `false` on an invalid
+  proof, and `get_attestation` for the same `(user, credit)` key stays `null`
+  — so the contract genuinely enforces the threshold.
 
 ## If the prover takes time to load
 

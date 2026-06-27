@@ -133,7 +133,7 @@ zkproof/
 ├── .env.example                    # CONTRACT_ID, NETWORK
 ├── .gitignore
 ├── README.md                       # updated
-└── CODEX_PROMPTS.md                # already exists, not touching
+
 ```
 
 ## Code style
@@ -186,7 +186,7 @@ The dev server's wallet + proof generation is verified by a manual run with a Fr
 - Not deploying to mainnet.
 - Not writing a verifier for an arbitrary circuit — the contract is purpose-built for `main.nr`.
 - Not adding features from the roadmap (`What's Next` section of README) — out of scope for "make it real".
-- Not touching `CODEX_PROMPTS.md` — historical context.
+- Nothing in `docs/` references removed scratch files anymore.
 - Not touching the design (Hero, Manifesto, etc.) — visuals are fine.
 
 ## Status as of 2026-06-24 — frontend integration complete

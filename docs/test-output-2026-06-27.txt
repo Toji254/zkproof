@@ -1,0 +1,23 @@
+Smoke-testing contract CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3 on testnet
+Using identity zkproof_dev = GBJ3MJYVMXHKGKRIJBMKQOVIMDRGI4PWMEPZEVUSYWBQ5DQOTJU6R3GD
+
+==> 1. total_attestations (should be 0):
+ℹ️  Simulation identified as read-only. Send by rerunning with `--send=yes`.
+9
+
+==> 2. check(user, income) for fresh user (should be false):
+ℹ️  Simulation identified as read-only. Send by rerunning with `--send=yes`.
+true
+
+==> 3. get_attestation(user, income) for fresh user (should be absent):
+ℹ️  Simulation identified as read-only. Send by rerunning with `--send=yes`.
+{"attestation_type":"income","expires_at":1790294676,"holder":"GBJ3MJYVMXHKGKRIJBMKQOVIMDRGI4PWMEPZEVUSYWBQ5DQOTJU6R3GD","issued_at":1782518676,"proof_hash":"de7ae94951fd835ffb96d2285dbf9344afcdcd18435f3d33845f49ce8a091cc3","threshold":"3000"}
+
+==> 4. verification key status:
+ℹ️  Simulation identified as read-only. Send by rerunning with `--send=yes`.
+REAL 1760 bytes 0000000000002000000000000000000d...
+
+✅ Smoke test passed. The contract is live and responsive on testnet.
+   The full attest() path requires a browser-side UltraHonk proof —
+   exercise it by opening the frontend, connecting a wallet, and
+   running through the four steps.

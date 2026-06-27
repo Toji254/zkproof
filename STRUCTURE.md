@@ -24,5 +24,5 @@ zkproof/
 │       ├── main.jsx            # Entry point
 │       ├── App.jsx             # Main application
 │       └── index.css           # Design system
-└── CODEX_PROMPTS.md            # Prompts for Codex to do heavy lifting
+└── docs/                      # Specs, deployment, quickstart
 ```

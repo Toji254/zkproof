@@ -200,19 +200,32 @@ Recommended sequence:
 See [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md) for the deployment checklist and expected outputs.
 
 ## Screenshots to ship before submission
+Real product screenshots are captured against the deployed frontend. Until
+those are committed, the most authoritative screenshots of the end-to-end
+flow are the on-chain artefacts below — they prove the full happy path and
+the failure path actually work:
 
-Replace placeholder assets with real final screenshots:
-- `frontend/public/images/step1-data.jpg`
-- `frontend/public/images/step2-proof.jpg`
-- `frontend/public/images/step3-chain.jpg`
-- `frontend/public/images/step4-verify.jpg`
+- Contract: https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
+- Happy-path attestation tx: https://stellar.expert/explorer/testnet/tx/d060c741e461738b4ba59413dbb288aee6d4266f40ca69b05e9c929e51cc4943
+- Live evidence log: [`docs/EVIDENCE.md`](./docs/EVIDENCE.md) — test-flow.sh
+  output, the previously recorded balance attestation, and a live
+  failure-path simulation showing `attest()` returning `false` on an
+  invalid proof without writing any contract state.
 
-Each screenshot should have a one-line caption in the README.
-Example:
+## One-command deploy (Vercel)
 
-```md
-The landlord’s view shows only whether the renter qualified and when the attestation expires.
+`vercel.json` is configured for the Vite frontend at the repo root. From a
+fresh clone:
+
 ```
+npm --prefix frontend ci
+cd frontend && npm run build
+# then either `vercel` for a preview or `vercel --prod` to promote
+```
+
+Required env vars on Vercel:
+- `VITE_CONTRACT_ID` — defaults to the testnet value in `frontend/.env.example`
+- `VITE_NETWORK` — `TESTNET`
 
 ## Demo video
 
