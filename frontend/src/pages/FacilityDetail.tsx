@@ -85,9 +85,10 @@ export default function FacilityDetail({
   const [ledgerSavedMessage, setLedgerSavedMessage] = useState('');
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerExported, setLedgerExported] = useState(false);
-  const [selectedLedgerThemes, setSelectedLedgerThemes] = useState<Record<string, LedgerExportThemeId>>({});
-  const [ledgerExportMessage, setLedgerExportMessage] = useState('');
-  const [exportingRecordId, setExportingRecordId] = useState<string | null>(null);
+  const [exportModalRecord, setExportModalRecord] = useState<LandlordLedgerRecord | null>(null);
+  const [exportModalTheme, setExportModalTheme] = useState<LedgerExportThemeId>('noir');
+  const [exportModalMessage, setExportModalMessage] = useState('');
+  const [exportModalBusy, setExportModalBusy] = useState(false);
   const [requestCopied, setRequestCopied] = useState(false);
   const commitmentStatusRef = useRef<HTMLDivElement | null>(null);
 
@@ -315,31 +316,34 @@ export default function FacilityDetail({
     }
   };
 
-  const getLedgerTheme = (recordId: string): LedgerExportThemeId => selectedLedgerThemes[recordId] ?? 'noir';
-
-  const setLedgerTheme = (recordId: string, themeId: LedgerExportThemeId) => {
-    setSelectedLedgerThemes((prev) => ({ ...prev, [recordId]: themeId }));
+  const openExportModal = (record: LandlordLedgerRecord) => {
+    setExportModalRecord(record);
+    setExportModalTheme('noir');
+    setExportModalMessage('');
   };
 
-  const handleExportLedgerAsset = async (record: LandlordLedgerRecord, format: 'png' | 'pdf') => {
-    const themeId = getLedgerTheme(record.id);
-    setExportingRecordId(record.id);
-    setLedgerExportMessage('');
+  const closeExportModal = () => {
+    if (exportModalBusy) return;
+    setExportModalRecord(null);
+    setExportModalMessage('');
+  };
 
+  const handleExportFromModal = async (format: 'png' | 'pdf') => {
+    if (!exportModalRecord) return;
+    setExportModalBusy(true);
+    setExportModalMessage('');
     try {
       if (format === 'png') {
-        await exportLedgerRecordPng(record, themeId);
+        await exportLedgerRecordPng(exportModalRecord, exportModalTheme);
       } else {
-        await exportLedgerRecordPdf(record, themeId);
+        await exportLedgerRecordPdf(exportModalRecord, exportModalTheme);
       }
-      setLedgerExportMessage(`Exported ${record.renterPublicId} as ${format.toUpperCase()} (${themeId}).`);
-      window.setTimeout(() => setLedgerExportMessage(''), 2400);
+      setExportModalMessage(`Saved ${format.toUpperCase()} (${exportModalTheme} theme).`);
     } catch (error) {
       console.error(error);
-      setLedgerExportMessage(`Could not export ${format.toUpperCase()} right now.`);
-      window.setTimeout(() => setLedgerExportMessage(''), 2400);
+      setExportModalMessage(`Could not export ${format.toUpperCase()} right now.`);
     } finally {
-      setExportingRecordId(null);
+      setExportModalBusy(false);
     }
   };
 
@@ -1343,13 +1347,13 @@ export default function FacilityDetail({
 
                 {savedLedgerRecords.length > 0 && (
                   <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid rgba(136,153,170,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>
                           Saved landlord ledger records
                         </div>
                         <div style={{ fontSize: '11px', color: '#556677', lineHeight: 1.6, maxWidth: '640px' }}>
-                          Each saved attestation now doubles as a polished share artifact. Pick a visual theme, then export a renter-ready PNG or a PDF audit copy.
+                          Click Export on any record to save it as a polished PNG card, a PDF audit copy, or a raw JSON backup.
                         </div>
                       </div>
                       <button
@@ -1369,9 +1373,6 @@ export default function FacilityDetail({
                         {ledgerExported ? 'Exported backup' : 'Export raw JSON backup'}
                       </button>
                     </div>
-                    {ledgerExportMessage && (
-                      <div style={{ marginBottom: '12px', fontSize: '10px', color: '#00d4aa' }}>{ledgerExportMessage}</div>
-                    )}
                     <div style={{ marginBottom: '12px' }}>
                       <input
                         type="text"
@@ -1392,133 +1393,61 @@ export default function FacilityDetail({
                     <div style={{ fontSize: '10px', color: '#556677', marginBottom: '12px' }}>
                       {filteredLedgerRecords.length} of {savedLedgerRecords.length} record{savedLedgerRecords.length === 1 ? '' : 's'} shown
                     </div>
-                    <div style={{ display: 'grid', gap: '16px' }}>
-                      {filteredLedgerRecords.map((record) => {
-                        const activeTheme = getLedgerTheme(record.id);
-                        const isExporting = exportingRecordId === record.id;
-                        return (
-                          <div key={record.id} style={{ padding: '18px', background: 'linear-gradient(180deg, rgba(11,18,26,0.96) 0%, rgba(5,10,15,0.98) 100%)', border: '1px solid rgba(136,153,170,0.14)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                              <div>
-                                <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>Saved attestation</div>
-                                <div style={{ fontSize: '16px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '6px' }}>{record.renterPublicId}</div>
-                                <div style={{ fontSize: '11px', color: '#e8ecf1', lineHeight: 1.6 }}>
-                                  {record.attestationType.toUpperCase()} qualification • {record.threshold}
-                                </div>
-                              </div>
-                              <div style={{ fontSize: '10px', color: '#556677', textAlign: 'right', lineHeight: 1.7 }}>
-                                saved {new Date(record.savedAt).toLocaleString()}<br />
-                                expires {record.expiresAt}
-                              </div>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {filteredLedgerRecords.map((record) => (
+                        <div
+                          key={record.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '14px',
+                            padding: '14px 16px',
+                            background: 'rgba(8,17,26,0.92)',
+                            border: '1px solid rgba(136,153,170,0.14)',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: '1 1 320px' }}>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '12px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.05em' }}>{record.renterPublicId}</span>
+                              <span style={{ fontSize: '10px', color: '#556677' }}>·</span>
+                              <span style={{ fontSize: '11px', color: '#e8ecf1' }}>{record.attestationType.toUpperCase()} · {record.threshold}</span>
                             </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(320px, 1fr)', gap: '16px' }}>
-                              <div style={{ padding: '16px', background: 'rgba(8,17,26,0.92)', border: '1px solid rgba(0,212,170,0.12)' }}>
-                                <div style={{ display: 'grid', gap: '12px' }}>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Renter ID</span>
-                                    <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 700 }}>{record.renterPublicId}</span>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Landlord ID</span>
-                                    <span style={{ fontSize: '11px', color: '#e8ecf1', fontWeight: 700 }}>{record.landlordPublicId}</span>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Wallet reference</span>
-                                    <span style={{ fontSize: '11px', color: '#e8ecf1', wordBreak: 'break-all' }}>{record.renterWalletAddress}</span>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Audit links</span>
-                                    <span style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                                      {record.txHash && (
-                                        <a href={getStellarExpertTxUrl(record.txHash)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
-                                          tx ↗
-                                        </a>
-                                      )}
-                                      {record.contractId && (
-                                        <a href={getStellarExpertContractUrl(record.contractId)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
-                                          contract ↗
-                                        </a>
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(136,153,170,0.12)' }}>
-                                <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '10px' }}>
-                                  Choose share card theme
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px', marginBottom: '14px' }}>
-                                  {LEDGER_EXPORT_THEMES.map((theme) => {
-                                    const active = activeTheme === theme.id;
-                                    return (
-                                      <button
-                                        key={theme.id}
-                                        onClick={() => setLedgerTheme(record.id, theme.id)}
-                                        style={{
-                                          padding: '12px',
-                                          border: active ? `1px solid ${theme.accent}` : '1px solid rgba(136,153,170,0.14)',
-                                          background: `linear-gradient(180deg, ${theme.panel} 0%, ${theme.panelAlt} 100%)`,
-                                          cursor: 'pointer',
-                                          textAlign: 'left',
-                                        }}
-                                      >
-                                        <div style={{ height: '54px', border: `1px solid ${theme.deco}`, background: `radial-gradient(circle at top right, ${theme.accent}33 0%, transparent 45%), linear-gradient(180deg, ${theme.panelAlt} 0%, ${theme.panel} 100%)`, marginBottom: '10px' }} />
-                                        <div style={{ fontSize: '10px', color: active ? theme.accent : '#e8ecf1', textTransform: 'uppercase', fontWeight: 700 }}>{theme.name}</div>
-                                        <div style={{ fontSize: '9px', color: '#556677', marginTop: '4px', lineHeight: 1.5 }}>
-                                          {theme.id === 'noir' ? 'Closest to the app UI' : theme.id === 'emerald' ? 'Certificate-style handoff' : 'Exchange-card style snapshot'}
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-                                  <button
-                                    onClick={() => handleExportLedgerAsset(record, 'png')}
-                                    disabled={isExporting}
-                                    style={{
-                                      padding: '10px 12px',
-                                      background: '#00d4aa',
-                                      color: '#050a0f',
-                                      border: 'none',
-                                      fontSize: '10px',
-                                      fontWeight: 700,
-                                      textTransform: 'uppercase',
-                                      cursor: isExporting ? 'wait' : 'pointer',
-                                      fontFamily: "'IBM Plex Mono', monospace",
-                                      opacity: isExporting ? 0.7 : 1,
-                                    }}
-                                  >
-                                    {isExporting ? 'Exporting…' : 'Export PNG card'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleExportLedgerAsset(record, 'pdf')}
-                                    disabled={isExporting}
-                                    style={{
-                                      padding: '10px 12px',
-                                      background: 'transparent',
-                                      color: '#e8ecf1',
-                                      border: '1px solid rgba(136,153,170,0.18)',
-                                      fontSize: '10px',
-                                      fontWeight: 700,
-                                      textTransform: 'uppercase',
-                                      cursor: isExporting ? 'wait' : 'pointer',
-                                      fontFamily: "'IBM Plex Mono', monospace",
-                                      opacity: isExporting ? 0.7 : 1,
-                                    }}
-                                  >
-                                    {isExporting ? 'Preparing…' : 'Export PDF copy'}
-                                  </button>
-                                </div>
-                                <div style={{ fontSize: '10px', color: '#556677', marginTop: '10px', lineHeight: 1.6 }}>
-                                  PNG is for renter/landlord sharing. PDF is for a more formal audit-style copy. JSON remains available as the raw backup export above.
-                                </div>
-                              </div>
+                            <div style={{ fontSize: '10px', color: '#556677', lineHeight: 1.6, wordBreak: 'break-all' }}>
+                              wallet reference: <span style={{ color: '#a8b8c8' }}>{record.renterWalletAddress}</span>
                             </div>
                           </div>
-                        );
-                      })}
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {record.txHash && (
+                              <a href={getStellarExpertTxUrl(record.txHash)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
+                                tx ↗
+                              </a>
+                            )}
+                            {record.contractId && (
+                              <a href={getStellarExpertContractUrl(record.contractId)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
+                                contract ↗
+                              </a>
+                            )}
+                            <button
+                              onClick={() => openExportModal(record)}
+                              style={{
+                                padding: '8px 14px',
+                                background: '#00d4aa',
+                                color: '#050a0f',
+                                border: 'none',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                cursor: 'pointer',
+                                fontFamily: "'IBM Plex Mono', monospace",
+                              }}
+                            >
+                              Export…
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                       {filteredLedgerRecords.length === 0 && (
                         <div style={{ padding: '14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.12)', fontSize: '10px', color: '#556677', lineHeight: 1.6 }}>
                           No saved ledger records match this search yet.
@@ -1575,6 +1504,162 @@ export default function FacilityDetail({
           </div>
         </div>
       </div>
+
+      {exportModalRecord && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Export attestation for ${exportModalRecord.renterPublicId}`}
+          onClick={closeExportModal}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 10, 0.78)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 200,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(720px, 100%)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: 'linear-gradient(180deg, rgba(11,18,26,0.98) 0%, rgba(5,10,15,1) 100%)',
+              border: '1px solid rgba(0, 212, 170, 0.24)',
+              padding: '24px',
+              boxSizing: 'border-box',
+              boxShadow: '0 24px 80px rgba(0, 212, 170, 0.12)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.06em' }}>
+                  Export attestation
+                </div>
+                <div style={{ fontSize: '18px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '4px' }}>
+                  {exportModalRecord.renterPublicId}
+                </div>
+                <div style={{ fontSize: '11px', color: '#a8b8c8', lineHeight: 1.6 }}>
+                  {exportModalRecord.attestationType.toUpperCase()} · threshold {exportModalRecord.threshold}
+                </div>
+              </div>
+              <button
+                onClick={closeExportModal}
+                aria-label="Close export dialog"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(136,153,170,0.18)',
+                  color: '#e8ecf1',
+                  width: '36px',
+                  height: '36px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.06em' }}>
+              Choose share card theme
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px', marginBottom: '18px' }}>
+              {LEDGER_EXPORT_THEMES.map((theme) => {
+                const active = exportModalTheme === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    onClick={() => setExportModalTheme(theme.id)}
+                    style={{
+                      padding: '12px',
+                      border: active ? `1px solid ${theme.accent}` : '1px solid rgba(136,153,170,0.18)',
+                      background: 'rgba(8,17,26,0.92)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ height: '60px', border: `1px solid ${theme.divider}`, background: `url(${theme.baseImage}) center / cover no-repeat`, marginBottom: '10px' }} />
+                    <div style={{ fontSize: '11px', color: active ? theme.accent : '#e8ecf1', textTransform: 'uppercase', fontWeight: 700 }}>
+                      {theme.shortLabel}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#556677', marginTop: '4px', lineHeight: 1.5 }}>
+                      {theme.id === 'noir' ? 'Closest to the app UI' : theme.id === 'emerald' ? 'Certificate-style handoff' : 'Exchange-card style snapshot'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.06em' }}>
+              Save as
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', marginBottom: '14px' }}>
+              <button
+                onClick={() => handleExportFromModal('png')}
+                disabled={exportModalBusy}
+                style={{
+                  padding: '14px 12px',
+                  background: '#00d4aa',
+                  color: '#050a0f',
+                  border: 'none',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  cursor: exportModalBusy ? 'wait' : 'pointer',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  opacity: exportModalBusy ? 0.7 : 1,
+                }}
+              >
+                {exportModalBusy ? 'Working…' : 'PNG card'}
+              </button>
+              <button
+                onClick={() => handleExportFromModal('pdf')}
+                disabled={exportModalBusy}
+                style={{
+                  padding: '14px 12px',
+                  background: 'transparent',
+                  color: '#e8ecf1',
+                  border: '1px solid rgba(136,153,170,0.22)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  cursor: exportModalBusy ? 'wait' : 'pointer',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  opacity: exportModalBusy ? 0.7 : 1,
+                }}
+              >
+                {exportModalBusy ? 'Working…' : 'PDF copy'}
+              </button>
+            </div>
+
+            <div style={{ fontSize: '10px', color: '#556677', lineHeight: 1.6 }}>
+              PNG uses the theme card as a shareable image. PDF embeds the same card. Raw JSON backup remains available in the ledger header above.
+            </div>
+
+            {exportModalMessage && (
+              <div
+                role="status"
+                style={{
+                  marginTop: '14px',
+                  padding: '10px 12px',
+                  border: '1px solid rgba(0, 212, 170, 0.24)',
+                  background: 'rgba(0, 212, 170, 0.06)',
+                  fontSize: '11px',
+                  color: '#00d4aa',
+                }}
+              >
+                {exportModalMessage}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
