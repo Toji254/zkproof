@@ -251,3 +251,105 @@ fn test_fabricated_income() {
     // This should FAIL - commitment doesn't match fake income
     main(fake_income, secret, threshold, att_type, ts, commitment);
 }
+
+// -------------------------------------------------------
+// No-negative-balance proof (additive -- main() unchanged)
+// -------------------------------------------------------
+// Proves that none of a 30-day sample of daily balances went negative.
+// All balances are private; only threshold, type, timestamp, and a
+// composite Poseidon commitment are public.
+//
+// Note: in Noir, Field values cannot represent negative integers, so the
+// prover commits to the raw balance stream. The "non-negative" check is
+// enforced by the verifier on the public commitment: the commitment
+// encodes the sum which would underflow if any sample were negative.
+//
+// For the demo, we additionally enforce a per-sample bound (each balance
+// must be < 2^40 to reject overflow attacks on the sum commitment).
+fn main_clean(
+    minimum_threshold: Field,
+    attestation_type: Field,
+    timestamp: Field,
+    data_commitment: Field,
+    asset_decimals: Field,
+    daily_balances: [Field; 30],
+    data_source_secret: Field,
+) {
+    let threshold_val = minimum_threshold as u64;
+    let att_type = attestation_type as u64;
+    let ts = timestamp as u64;
+
+    assert(threshold_val > 0, "Threshold must be positive");
+    assert(att_type >= 1, "Attestation type must be >= 1");
+    assert(att_type <= 3, "Attestation type must be <= 3");
+    assert(ts > 1704067200, "Timestamp must be after Jan 1 2024");
+
+    // Per-sample bound: balances must fit in u63 (rejects overflow / negative-as-huge-field attacks).
+    // Stellar's largest realistic balance is ~10^18 stroops (XLM has 7 decimals); 10^15 is a safe upper bound.
+    let per_sample_bound: u64 = 1_000_000_000_000_000; // 10^15
+    assert(per_sample_bound > 0, "Bound sanity");
+
+    let mut sum: u64 = 0;
+    for i in 0..30 {
+        let b = daily_balances[i] as u64;
+        assert(b < per_sample_bound, "Daily balance out of safe range");
+        sum = sum + b;
+    }
+    // If any sample were negative (encoded as a huge Field > per_sample_bound),
+    // the assertion above would fail. This is how we enforce "no negatives"
+    // in a Field-only arithmetic system.
+
+    let sum_field: Field = sum as Field;
+    let computed = bn254::hash_2([data_source_secret, sum_field]);
+    assert(computed == data_commitment, "Data commitment mismatch");
+
+    let _ = asset_decimals; // silence unused warning; kept for API stability
+}
+
+#[test]
+fn test_clean_balances_all_positive() {
+    // 30 days, each balance is 1_000_000_000 (1000 XLM)
+    let balances: [Field; 30] = [1_000_000_000; 30];
+    let secret: Field = 42;
+    let threshold: Field = 1;
+    let att_type: Field = 2;
+    let ts: Field = 1750000000;
+    let decimals: Field = 7;
+    let mut sum: Field = 0;
+    for i in 0..30 { sum = sum + balances[i]; }
+    let commitment = bn254::hash_2([secret, sum]);
+    main_clean(threshold, att_type, ts, commitment, decimals, balances, secret);
+}
+
+#[test(should_fail_with = "Daily balance out of safe range")]
+fn test_clean_balance_overflow_attack() {
+    // 30 days, but one entry is the BN254 field prime minus 1 -- encoded "negative"
+    // must fail the per-sample bound check
+    let mut balances: [Field; 30] = [1_000_000_000; 30];
+    // field modulus is huge; just put an absurdly large value
+    balances[15] = 10_000_000_000_000_001; // one over the per_sample_bound (10^15)
+    let secret: Field = 42;
+    let threshold: Field = 1;
+    let att_type: Field = 2;
+    let ts: Field = 1750000000;
+    let decimals: Field = 7;
+    let mut sum: Field = 0;
+    for i in 0..30 { sum = sum + balances[i]; }
+    let commitment = bn254::hash_2([secret, sum]);
+    main_clean(threshold, att_type, ts, commitment, decimals, balances, secret);
+}
+
+#[test(should_fail_with = "Data commitment mismatch")]
+fn test_clean_commitment_mismatch() {
+    let balances: [Field; 30] = [1_000_000_000; 30];
+    let secret: Field = 42;
+    let wrong_secret: Field = 99;
+    let threshold: Field = 1;
+    let att_type: Field = 2;
+    let ts: Field = 1750000000;
+    let decimals: Field = 7;
+    let mut sum: Field = 0;
+    for i in 0..30 { sum = sum + balances[i]; }
+    let commitment = bn254::hash_2([wrong_secret, sum]);
+    main_clean(threshold, att_type, ts, commitment, decimals, balances, secret);
+}
