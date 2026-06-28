@@ -46,7 +46,6 @@ This is why the product is easy to understand beyond crypto: the verifier gets t
 - **Demo video:** *(record per `DEMO_SCRIPT.md`, upload to YouTube, paste the URL here)*
 - **Judge quickstart:** [`docs/JUDGE_QUICKSTART.md`](./docs/JUDGE_QUICKSTART.md)
 - **Deployment proof:** [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md)
-- **Competitive positioning:** [`docs/COMPETITIVE_POSITIONING.md`](./docs/COMPETITIVE_POSITIONING.md)
 - **Run locally:** `cd frontend && npm install && NODE_OPTIONS="--max-old-space-size=2048" npm run dev` → http://localhost:3000
 
 ## Demo flow
