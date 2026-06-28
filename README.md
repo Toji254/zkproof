@@ -62,6 +62,46 @@ Failure path:
 2. The proof path should fail or no passing attestation should be issued.
 3. The landlord must not see a false-positive qualified result.
 
+## Renter and landlord public IDs
+
+ProofPass generates a public app ID for each role the first time that role enters the flow:
+
+- renter IDs look like `RNT-XXXXXX`
+- landlord IDs look like `LND-XXXXXX`
+
+These generated numbers are app-level public references, not blockchain wallets and not secret keys.
+
+What they do:
+- give each renter and landlord a stable public label inside the UI
+- let the renter share a proof trail that includes both wallet address and renter public ID
+- let the landlord save attestations to a landlord ledger with a human-readable reference instead of only a long wallet string
+- make shared verification links, screenshots, and ledger exports easier to follow
+
+What they do not do:
+- they do not hold funds
+- they do not sign Stellar transactions
+- they do not replace the renter wallet address
+- they do not create an on-chain identity by themselves
+
+How they work today:
+- the UI generates the ID on first role entry
+- the ID is stored locally in the browser for that role
+- the renter public ID is attached to the shared landlord verification link
+- the landlord public ID is attached to saved landlord ledger records
+- the wallet address and on-chain attestation remain the real verification source of truth
+
+Why this design matters:
+- generating random blockchain wallets here would create custody, recovery, and UX problems
+- the renter should keep using their real Stellar wallet for actual on-chain attestations
+- ProofPass adds a shareable public reference layer so humans can track who is who without turning the app into a wallet provider
+
+Authenticity model:
+- the public ID helps people coordinate off-chain
+- the renter wallet, tx hash, contract link, and Stellar Expert pages prove authenticity on-chain
+- landlords should treat the public ID as a readable label, not as the cryptographic proof itself
+
+In short: the generated renter and landlord numbers are public reference IDs that make the handoff cleaner, while the actual proof remains anchored to the renter wallet and Stellar attestation.
+
 ## Judge quickstart
 
 1. Open the live demo.

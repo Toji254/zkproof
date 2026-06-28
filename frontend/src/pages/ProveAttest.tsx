@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { navigationConfig } from '../config';
 import { computeCommitment, generateProof } from '../lib/prover';
-import { submitAttestation, fetchWalletBalances } from '../lib/stellar';
+import { fetchWalletBalances, submitAttestation } from "../lib/stellar";
+import { getQaConfig } from "../lib/qa";
 import { normalizeAttestationInput } from '../lib/attestationMath';
-import { NETWORK } from '../lib/config';
+import { CONTRACT_ID, NETWORK } from '../lib/config';
+import { getStellarExpertAccountUrl, getStellarExpertContractUrl, getStellarExpertTxUrl } from '../lib/explorer';
+import { ensureProfile, updateProfile } from '../lib/profile';
 import type { ZkState } from '../App';
 
 interface ProveAttestProps {
@@ -62,21 +65,33 @@ export default function ProveAttest({
   zkState: _zkState,
   setZkState,
 }: ProveAttestProps) {
+  const location = useLocation();
+  const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const qa = getQaConfig();
+  const proveQa = qa?.prove;
+  const suppressNetwork = qa?.suppressNetwork ?? false;
+  const renterProfile = useMemo(() => ensureProfile('renter'), []);
+  const sharedLandlordPublicId = query.get('landlordId') ?? '';
+  const requestedAttestationType = query.get('type') as 'income' | 'balance' | 'credit' | null;
+  const [shareCopied, setShareCopied] = useState(false);
+  const [walletCopied, setWalletCopied] = useState(false);
+  const [verifyLinkCopied, setVerifyLinkCopied] = useState(false);
 
-  const [attType, setAttType] = useState<'income' | 'balance' | 'credit'>('income');
-  const [privateValue, setPrivateValue] = useState('');
-  const [threshold, setThreshold] = useState(INCOME_THRESHOLDS[1].value);
-  const [stage, setStage] = useState<Stage>('idle');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [txHash, setTxHash] = useState('');
-  const [log, setLog] = useState('');
+  const [attType, setAttType] = useState<'income' | 'balance' | 'credit'>(proveQa?.attType ?? requestedAttestationType ?? 'income');
+  const [privateValue, setPrivateValue] = useState(proveQa?.privateValue ?? '');
+  const [threshold, setThreshold] = useState(proveQa?.threshold ?? INCOME_THRESHOLDS[1].value);
+  const [stage, setStage] = useState<Stage>(proveQa?.stage ?? 'idle');
+  const [errorMsg, setErrorMsg] = useState(proveQa?.errorMsg ?? '');
+  const [txHash, setTxHash] = useState(proveQa?.txHash ?? '');
+  const [log, setLog] = useState(proveQa?.log ?? '');
 
   // Wallet asset state
   const [walletAssets, setWalletAssets] = useState<WalletAsset[]>([]);
-  const [selectedAssetCode, setSelectedAssetCode] = useState<string>('XLM');
+  const [selectedAssetCode, setSelectedAssetCode] = useState<string>(proveQa?.selectedAssetCode ?? 'XLM');
 
   // Auto-load wallet assets whenever address changes
   useEffect(() => {
+    if (suppressNetwork) return;
     if (!walletAddress) { setWalletAssets([]); return; }
     fetchWalletBalances(walletAddress)
       .then((assets) => {
@@ -95,7 +110,7 @@ export default function ProveAttest({
         }
       })
       .catch(() => {});
-  }, [walletAddress]);
+  }, [walletAddress, suppressNetwork]);
 
   // When switching to balance type, fill with selected asset balance
   useEffect(() => {
@@ -126,9 +141,26 @@ export default function ProveAttest({
     : attType === 'balance' ? selectedAssetCode
     : 'pts';
   const networkSlug = NETWORK === 'PUBLIC' ? 'public' : 'testnet';
-  const explorerTxUrl = txHash
-    ? `https://stellar.expert/explorer/${networkSlug}/tx/${txHash}`
-    : '';
+  const explorerTxUrl = txHash ? getStellarExpertTxUrl(txHash) : '';
+  const explorerAccountUrl = walletAddress ? getStellarExpertAccountUrl(walletAddress) : '';
+  const explorerContractUrl = CONTRACT_ID ? getStellarExpertContractUrl(CONTRACT_ID) : '';
+  const landlordIdParam = sharedLandlordPublicId ? `&landlordId=${encodeURIComponent(sharedLandlordPublicId)}` : '';
+  const shareVerifyUrl = walletAddress
+    ? `/facility/verify?address=${encodeURIComponent(walletAddress)}&type=${encodeURIComponent(attType)}&publicId=${encodeURIComponent(renterProfile.publicId)}&tx=${encodeURIComponent(txHash)}${landlordIdParam}`
+    : '/facility/verify';
+  const shareVerifyAbsoluteUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${shareVerifyUrl}`
+    : shareVerifyUrl;
+  const shareMessage = [
+    `ProofPass renter ID: ${renterProfile.publicId}`,
+    sharedLandlordPublicId ? `For landlord ID: ${sharedLandlordPublicId}` : null,
+    walletAddress ? `Wallet: ${walletAddress}` : null,
+    `Attestation type: ${attType}`,
+    txHash ? `Stellar tx: ${txHash}` : null,
+    `Landlord verify: ${shareVerifyAbsoluteUrl}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
   const valueLabel = attType === 'income' ? `Monthly Income  [${selectedAssetCode !== 'XLM' ? selectedAssetCode : 'USD'}]`
     : attType === 'balance' ? `Account Balance  [${selectedAssetCode}]`
     : 'Credit Score  [FICO]';
@@ -136,7 +168,44 @@ export default function ProveAttest({
     : attType === 'balance' ? `Your total ${selectedAssetCode} balance — stays in your browser only`
     : 'Your FICO or equivalent credit score (300–850) — stays in your browser only';
 
+  useEffect(() => {
+    if (!walletAddress) return;
+    updateProfile('renter', { walletAddress });
+  }, [walletAddress]);
+
   const addLog = (msg: string) => setLog(msg);
+
+  const handleCopyShareMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(shareMessage);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      setShareCopied(false);
+    }
+  };
+
+  const handleCopyWalletAddress = async () => {
+    if (!walletAddress) return;
+
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setWalletCopied(true);
+      window.setTimeout(() => setWalletCopied(false), 2000);
+    } catch {
+      setWalletCopied(false);
+    }
+  };
+
+  const handleCopyVerifyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareVerifyAbsoluteUrl);
+      setVerifyLinkCopied(true);
+      window.setTimeout(() => setVerifyLinkCopied(false), 2000);
+    } catch {
+      setVerifyLinkCopied(false);
+    }
+  };
 
   const handleProveAndAttest = async () => {
     if (!walletAddress) {
@@ -194,7 +263,7 @@ export default function ProveAttest({
         [normalizedThreshold.toString(), attType, String(result.timestamp), result.commitmentHex],
         attType,
         threshold,        // raw human-readable threshold (e.g. "5000"), NOT the scaled circuit value
-        (submittedHash) => {
+        (submittedHash: string) => {
           setTxHash(submittedHash);
           addLog(`Transaction submitted to Stellar ${networkSlug}. Waiting for final confirmation…`);
         },
@@ -202,6 +271,11 @@ export default function ProveAttest({
 
       setTxHash(hash);
       setZkState((prev) => ({ ...prev, txHash: hash }));
+      updateProfile('renter', {
+        walletAddress,
+        lastTxHash: hash,
+        lastAttestationType: attType,
+      });
       addLog(`✅ Attestation confirmed on Stellar! Tx: ${hash.slice(0, 16)}…`);
 
       setStage('done');
@@ -319,6 +393,20 @@ export default function ProveAttest({
                     {walletAddress.slice(0, 8)}…{walletAddress.slice(-6)}
                   </span>
                   <span style={{ fontSize: '10px', color: '#556677', marginLeft: 'auto' }}>wallet connected</span>
+                </div>
+              )}
+
+              {sharedLandlordPublicId && (
+                <div style={{ marginBottom: '28px', padding: '14px', background: 'rgba(136,153,170,0.06)', border: '1px solid rgba(136,153,170,0.16)' }}>
+                  <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.06em' }}>
+                    Landlord request received
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#ffffff', marginBottom: '8px', lineHeight: 1.6 }}>
+                    You are proving for landlord ID <span style={{ color: '#00d4aa', fontWeight: 700 }}>{sharedLandlordPublicId}</span>.
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#556677', lineHeight: 1.6 }}>
+                    This ID is a human-readable handoff reference. It helps both sides match the proof to the intended landlord without turning ProofPass into a messaging app.
+                  </div>
                 </div>
               )}
 
@@ -495,34 +583,165 @@ export default function ProveAttest({
                   </div>
 
                   {/* Proof summary */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '32px' }}>
-                    {[
-                      { label: 'Type', value: attType.charAt(0).toUpperCase() + attType.slice(1) + ' Threshold' },
-                      { label: 'Threshold', value: Number(threshold).toLocaleString() + ' ' + assetUnit },
-                      { label: 'Wallet', value: walletAddress.slice(0, 10) + '…' + walletAddress.slice(-6) },
-                      ...(txHash ? [{ label: 'Tx Hash', value: txHash.slice(0, 18) + '…' }] : []),
-                    ].map(({ label, value }) => (
-                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
-                        <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>{label}</span>
-                        <span style={{ fontSize: '11px', color: '#e8ecf1' }}>{value}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                      <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Renter ID</span>
+                      <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 700 }}>{renterProfile.publicId}</span>
+                    </div>
+                    {sharedLandlordPublicId && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                        <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Landlord ID</span>
+                        <span style={{ fontSize: '11px', color: '#e8ecf1', fontWeight: 700 }}>{sharedLandlordPublicId}</span>
                       </div>
-                    ))}
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                      <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Type</span>
+                      <span style={{ fontSize: '11px', color: '#e8ecf1' }}>{attType.charAt(0).toUpperCase() + attType.slice(1) + ' Threshold'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                      <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Threshold</span>
+                      <span style={{ fontSize: '11px', color: '#e8ecf1' }}>{Number(threshold).toLocaleString()} {assetUnit}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                      <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Wallet</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <a href={explorerAccountUrl} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#00d4aa', textDecoration: 'underline', fontWeight: 600 }}>
+                          {walletAddress.slice(0, 10)}…{walletAddress.slice(-6)} ↗
+                        </a>
+                        <button
+                          onClick={handleCopyWalletAddress}
+                          style={{
+                            border: '1px solid rgba(0,212,170,0.24)',
+                            background: 'transparent',
+                            color: walletCopied ? '#00d4aa' : '#8899aa',
+                            fontSize: '10px',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            fontFamily: "'IBM Plex Mono', monospace",
+                          }}
+                        >
+                          {walletCopied ? 'copied' : 'copy'}
+                        </button>
+                      </div>
+                    </div>
+                    {txHash && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                        <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Tx Hash</span>
+                        <a href={explorerTxUrl} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#00d4aa', textDecoration: 'underline', fontWeight: 600 }}>
+                          {txHash.slice(0, 18)}… ↗
+                        </a>
+                      </div>
+                    )}
                   </div>
 
-                  {txHash && (
-                    <a
-                      href={explorerTxUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ display: 'block', textAlign: 'center', fontSize: '11px', color: '#00d4aa', textDecoration: 'underline', marginBottom: '24px' }}
-                    >
-                      View on StellarExpert ↗
-                    </a>
-                  )}
+                  <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(0, 212, 170, 0.05)', border: '1px solid rgba(0, 212, 170, 0.18)' }}>
+                    <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#8899aa', marginBottom: '10px', letterSpacing: '0.06em' }}>
+                      Share with landlord
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#8899aa', lineHeight: 1.7, marginBottom: '12px' }}>
+                      Send your wallet address and verification link together. The landlord gets your public renter ID, the correct requirement type, and the clickable on-chain proof trail already prefilled.
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+                      <button
+                        onClick={handleCopyWalletAddress}
+                        style={{
+                          padding: '12px 0',
+                          background: 'transparent',
+                          border: '1px solid rgba(0,212,170,0.28)',
+                          color: walletCopied ? '#00d4aa' : '#e8ecf1',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        {walletCopied ? 'Copied wallet' : 'Copy wallet'}
+                      </button>
+                      <button
+                        onClick={handleCopyVerifyLink}
+                        style={{
+                          padding: '12px 0',
+                          background: 'transparent',
+                          border: '1px solid rgba(0,212,170,0.28)',
+                          color: verifyLinkCopied ? '#00d4aa' : '#e8ecf1',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        {verifyLinkCopied ? 'Copied verify link' : 'Copy verify link'}
+                      </button>
+                      <button
+                        onClick={handleCopyShareMessage}
+                        style={{
+                          padding: '12px 0',
+                          background: 'transparent',
+                          border: '1px solid rgba(0,212,170,0.28)',
+                          color: shareCopied ? '#00d4aa' : '#e8ecf1',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        {shareCopied ? 'Copied share note' : 'Copy share note'}
+                      </button>
+                      <Link
+                        to={shareVerifyUrl}
+                        style={{
+                          padding: '12px 0',
+                          textAlign: 'center',
+                          background: '#00d4aa',
+                          color: '#050a0f',
+                          textDecoration: 'none',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        Open landlord view →
+                      </Link>
+                    </div>
+                    <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
+                      <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>
+                        Prefilled landlord link
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#00d4aa', wordBreak: 'break-all', lineHeight: 1.6 }}>
+                        {shareVerifyAbsoluteUrl}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#556677', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                      {shareMessage}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '10px', marginBottom: '24px' }}>
+                    {txHash && (
+                      <a href={explorerTxUrl} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', fontSize: '11px', color: '#00d4aa', textDecoration: 'underline' }}>
+                        View transaction on Stellar Expert ↗
+                      </a>
+                    )}
+                    {walletAddress && (
+                      <a href={explorerAccountUrl} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', fontSize: '11px', color: '#00d4aa', textDecoration: 'underline' }}>
+                        View wallet on Stellar Expert ↗
+                      </a>
+                    )}
+                    {CONTRACT_ID && (
+                      <a href={explorerContractUrl} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', fontSize: '11px', color: '#00d4aa', textDecoration: 'underline' }}>
+                        View attestation contract on Stellar Expert ↗
+                      </a>
+                    )}
+                  </div>
 
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <Link
-                      to="/facility/verify"
+                      to={shareVerifyUrl}
                       style={{
                         flex: 1,
                         padding: '13px 0',
@@ -540,7 +759,7 @@ export default function ProveAttest({
                       Landlord Verify →
                     </Link>
                     <button
-                      onClick={() => { setStage('idle'); setPrivateValue(''); setTxHash(''); setLog(''); }}
+                      onClick={() => { setStage('idle'); setPrivateValue(''); setTxHash(''); setLog(''); setShareCopied(false); setWalletCopied(false); setVerifyLinkCopied(false); }}
                       style={{
                         flex: 1,
                         padding: '13px 0',

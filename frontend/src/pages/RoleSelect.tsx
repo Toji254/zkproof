@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { siteConfig } from '../config';
+import { ensureProfile, getAllProfiles, type UserProfile } from '../lib/profile';
 
 /**
  * RoleSelect — first thing every visitor sees.
@@ -16,6 +18,17 @@ import { siteConfig } from '../config';
  * opens when the renter actively proceeds, so landlords never see it.
  */
 export default function RoleSelect() {
+  const [profiles, setProfiles] = useState<Partial<Record<'renter' | 'landlord', UserProfile>>>({});
+
+  useEffect(() => {
+    setProfiles(getAllProfiles());
+  }, []);
+
+  const handleRoleContinue = (role: 'renter' | 'landlord') => {
+    const profile = ensureProfile(role);
+    setProfiles((prev) => ({ ...prev, [role]: profile }));
+  };
+
   return (
     <section
       style={{
@@ -87,6 +100,7 @@ export default function RoleSelect() {
         {/* RENTER CARD */}
         <Link
           to="/prove"
+          onClick={() => handleRoleContinue('renter')}
           className="role-card"
           id="role-renter-card"
           style={{
@@ -153,7 +167,7 @@ export default function RoleSelect() {
             Generate a zero-knowledge proof locally in your browser. Your
             salary, balance, or credit score never leaves your device. You
             sign one Stellar transaction to record the attestation, then
-            hand your wallet address to the landlord.
+            share your renter ID plus wallet reference with the landlord.
           </p>
 
           <ul
@@ -173,6 +187,20 @@ export default function RoleSelect() {
             <li>→ Generate proof + submit attestation</li>
           </ul>
 
+          {profiles.renter && (
+            <div style={{ padding: '12px 14px', border: '1px solid rgba(0, 212, 170, 0.2)', background: 'rgba(0, 212, 170, 0.06)' }}>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#8899aa', marginBottom: '6px' }}>
+                Renter public ID
+              </div>
+              <div style={{ fontSize: '13px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.08em' }}>
+                {profiles.renter.publicId}
+              </div>
+              <div style={{ fontSize: '10px', color: '#556677', marginTop: '6px', lineHeight: 1.6 }}>
+                Share this as your ProofPass reference code when sending a proof to a landlord.
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               marginTop: '12px',
@@ -189,6 +217,7 @@ export default function RoleSelect() {
         {/* LANDLORD CARD */}
         <Link
           to="/facility/verify"
+          onClick={() => handleRoleContinue('landlord')}
           className="role-card"
           id="role-landlord-card"
           style={{
@@ -253,9 +282,10 @@ export default function RoleSelect() {
             }}
           >
             Paste the renter's Stellar wallet address, choose the
-            requirement type, and click Check. The contract returns a
-            simple YES or NO with the proven threshold and expiry date.
-            Nothing else.
+            requirement type, and click Check. Use your landlord ID as the
+            handoff reference so the renter knows exactly who the proof is
+            meant for. The contract returns a simple YES or NO with the
+            proven threshold and expiry date. Nothing else.
           </p>
 
           <ul
@@ -274,6 +304,20 @@ export default function RoleSelect() {
             <li>→ Paste the renter's wallet address</li>
             <li>→ See qualified / not qualified + threshold + expiry</li>
           </ul>
+
+          {profiles.landlord && (
+            <div style={{ padding: '12px 14px', border: '1px solid rgba(136, 153, 170, 0.2)', background: 'rgba(136, 153, 170, 0.06)' }}>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#8899aa', marginBottom: '6px' }}>
+                Landlord public ID
+              </div>
+              <div style={{ fontSize: '13px', color: '#ffffff', fontWeight: 700, letterSpacing: '0.08em' }}>
+                {profiles.landlord.publicId}
+              </div>
+              <div style={{ fontSize: '10px', color: '#556677', marginTop: '6px', lineHeight: 1.6 }}>
+                Share this with the renter as the destination reference for their proof handoff.
+              </div>
+            </div>
+          )}
 
           <div
             style={{

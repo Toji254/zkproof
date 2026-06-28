@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useAvailableWallets, connectWithWallet } from "../lib/wallets";
+import { useAvailableWallets, connectWithWallet, getWalletIconFallback } from "../lib/wallets";
 
 const isImageUrl = (value?: string) =>
-  Boolean(value && /^https?:\/\//i.test(value));
+  Boolean(value && /^(https?:\/\/|data:image\/|blob:|\/)/i.test(value));
 
 interface WalletPickerProps {
   open: boolean;
@@ -169,7 +169,7 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export default function WalletPicker({ open, onClose, onConnected }: WalletPickerProps) {
-  const wallets = useAvailableWallets();
+  const { wallets, loading } = useAvailableWallets();
   const [hovered, setHovered] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -200,12 +200,16 @@ export default function WalletPicker({ open, onClose, onConnected }: WalletPicke
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>CONNECT A STELLAR WALLET</div>
 
-        {wallets.length === 0 ? (
+        {loading ? (
           <div style={styles.empty}>
-            No Stellar wallets could be loaded right now.
+            Detecting installed Stellar wallets…
+          </div>
+        ) : wallets.length === 0 ? (
+          <div style={styles.empty}>
+            No installed Stellar wallets were detected in this browser.
             <br />
             <br />
-            Try reloading the page, then install or enable a supported wallet like Freighter, xBull, Albedo, Lobstr, Hana, or Rabet.
+            Install or enable Freighter, xBull, Albedo, Lobstr, Hana, or Rabet, then reopen this panel.
           </div>
         ) : (
           <div style={styles.walletList}>
@@ -229,6 +233,11 @@ export default function WalletPicker({ open, onClose, onConnected }: WalletPicke
                         style={styles.iconImage}
                         loading="lazy"
                         referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          const img = event.currentTarget;
+                          img.src = getWalletIconFallback(w.id, w.name);
+                          img.onerror = null;
+                        }}
                       />
                     ) : (
                       <span style={styles.iconFallback}>{w.icon ?? "🔐"}</span>

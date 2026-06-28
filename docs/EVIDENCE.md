@@ -1,6 +1,6 @@
 # Live Evidence — zkProof
 
-Generated 2026-06-27 against the deployed testnet contract.
+Generated 2026-06-28 against the deployed testnet contract.
 
 - Contract ID: `CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3`
 - Stellar Expert: https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
@@ -8,7 +8,7 @@ Generated 2026-06-27 against the deployed testnet contract.
 - RPC: https://soroban-testnet.stellar.org
 - Identity: `zkproof_dev` = `GBJ3MJYVMXHKGKRIJBMKQOVIMDRGI4PWMEPZEVUSYWBQ5DQOTJU6R3GD`
 - Real VK uploaded: 1760 bytes, non-zero prefix `0x0000000000002000000000000000000d…`
-- Previously recorded attestation tx: `d060c741e461738b4ba59413dbb288aee6d4266f40ca69b05e9c929e51cc4943`
+- Previously recorded attestation tx: `63493d4134ca48285290618a8a4271ede6f3ba2373bca45f3ce7a198f771c0bc`
 
 ## 1. ./scripts/test-flow.sh — happy-path smoke test
 

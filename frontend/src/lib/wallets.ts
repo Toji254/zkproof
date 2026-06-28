@@ -53,6 +53,82 @@ const WALLET_LABELS: Record<string, string> = {
 
 const FALLBACK_ICON = "🔐";
 
+const KNOWN_WALLET_ICONS: Record<string, string> = {
+  freighter: '/wallet-icons/freighter.png',
+  xbull: '/wallet-icons/xbull.png',
+  albedo: '/wallet-icons/albedo.png',
+  lobstr: '/wallet-icons/lobstr.png',
+  hana: '/wallet-icons/hana.png',
+  rabet: '/wallet-icons/rabet.png',
+  ledger: '/wallet-icons/ledger.png',
+  trezor: '/wallet-icons/trezor.png',
+  wc: '/wallet-icons/walletconnect.png',
+  klever: '/wallet-icons/klever.png',
+  bitget: '/wallet-icons/bitget.png',
+  fordefi: '/wallet-icons/fordefi.png',
+  cactuslink: '/wallet-icons/cactuslink.png',
+};
+
+const WALLET_ACCENTS: Record<string, string> = {
+  freighter: "#00d4aa",
+  xbull: "#ff8a00",
+  albedo: "#7c3aed",
+  lobstr: "#f97316",
+  hana: "#ec4899",
+  rabet: "#22c55e",
+  ledger: "#d1d5db",
+  trezor: "#f59e0b",
+  wc: "#3b82f6",
+  onekey: "#8b5cf6",
+  klever: "#06b6d4",
+  bitget: "#f97316",
+  fordefi: "#10b981",
+  cactuslink: "#14b8a6",
+  hotwallet: "#64748b",
+};
+
+function escapeSvgText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
+}
+
+function walletInitials(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("");
+  return (letters || "W").toUpperCase();
+}
+
+export function getWalletIconFallback(id: string, name: string): string {
+  const accent = WALLET_ACCENTS[id] ?? "#00d4aa";
+  const initials = escapeSvgText(walletInitials(name));
+  const label = escapeSvgText(name);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="${label}">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#08111a" />
+          <stop offset="100%" stop-color="#0f1b28" />
+        </linearGradient>
+        <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${accent}" />
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.12" />
+        </linearGradient>
+      </defs>
+      <rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="url(#bg)" stroke="url(#ring)" stroke-width="3" />
+      <circle cx="32" cy="25" r="14" fill="${accent}" fill-opacity="0.18" />
+      <text x="32" y="37" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="18" font-weight="700" fill="#e8ecf1">${initials}</text>
+      <path d="M19 46h26" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 const WALLET_ORDER = [
   "freighter",
   "xbull",
@@ -72,71 +148,26 @@ const WALLET_ORDER = [
 ] as const;
 
 type SupportedWallet = {
-  id: string;
-  name: string;
-  icon?: string;
-  isAvailable: boolean;
-  url?: string;
+ id: string;
+ name: string;
+ icon?: string;
+ isAvailable: boolean;
+ url?: string;
 };
 
-const FALLBACK_WALLETS: SupportedWallet[] = [
-  {
-    id: "freighter",
-    name: "Freighter",
-    icon: "https://stellar.creit.tech/wallet-icons/freighter.png",
-    isAvailable: false,
-    url: "https://www.freighter.app/",
-  },
-  {
-    id: "xbull",
-    name: "xBull",
-    icon: "https://stellar.creit.tech/wallet-icons/xbull.png",
-    isAvailable: false,
-    url: "https://xbull.app/",
-  },
-  {
-    id: "albedo",
-    name: "Albedo",
-    icon: "https://stellar.creit.tech/wallet-icons/albedo.png",
-    isAvailable: false,
-    url: "https://albedo.link/",
-  },
-  {
-    id: "lobstr",
-    name: "Lobstr",
-    icon: "https://stellar.creit.tech/wallet-icons/lobstr.png",
-    isAvailable: false,
-    url: "https://lobstr.co/",
-  },
-  {
-    id: "hana",
-    name: "Hana Wallet",
-    icon: "https://stellar.creit.tech/wallet-icons/hana.png",
-    isAvailable: false,
-    url: "https://hanawallet.io/",
-  },
-  {
-    id: "rabet",
-    name: "Rabet",
-    icon: "https://stellar.creit.tech/wallet-icons/rabet.png",
-    isAvailable: false,
-    url: "https://rabet.io/",
-  },
-];
-
 function sortWallets(wallets: WalletOption[]): WalletOption[] {
-  const rank = new Map<string, number>(WALLET_ORDER.map((id, index) => [id, index]));
+ const rank = new Map<string, number>(WALLET_ORDER.map((id, index) => [id, index]));
 
-  return [...wallets].sort((a, b) => {
-    if (a.installed !== b.installed) return a.installed ? -1 : 1;
-    if (a.canConnect !== b.canConnect) return a.canConnect ? -1 : 1;
+ return [...wallets].sort((a, b) => {
+   if (a.installed !== b.installed) return a.installed ? -1 : 1;
+   if (a.canConnect !== b.canConnect) return a.canConnect ? -1 : 1;
 
-    const aRank = rank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-    const bRank = rank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+   const aRank = rank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+   const bRank = rank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
 
-    if (aRank !== bRank) return aRank - bRank;
-    return a.name.localeCompare(b.name);
-  });
+   if (aRank !== bRank) return aRank - bRank;
+   return a.name.localeCompare(b.name);
+ });
 }
 
 async function detectFreighterInstalled(): Promise<boolean> {
@@ -182,7 +213,7 @@ async function normalizeWallet(wallet: SupportedWallet): Promise<WalletOption> {
     id: wallet.id,
     name: WALLET_LABELS[wallet.id] ?? wallet.name,
     productName: wallet.name,
-    icon: wallet.icon || FALLBACK_ICON,
+    icon: KNOWN_WALLET_ICONS[wallet.id] ?? wallet.icon ?? FALLBACK_ICON,
     url: wallet.url,
     installed,
     canConnect,
@@ -205,12 +236,8 @@ export async function listAvailableWallets(): Promise<WalletOption[]> {
     wallets = [];
   }
 
-  if (wallets.length === 0) {
-    wallets = FALLBACK_WALLETS;
-  }
-
   const normalized = await Promise.all(wallets.map((wallet) => normalizeWallet(wallet)));
-  return sortWallets(normalized);
+  return sortWallets(normalized.filter((wallet) => wallet.installed));
 }
 
 /**
@@ -297,8 +324,9 @@ export async function signWithKit(
  * React hook: returns the list of available wallets, with re-check on focus
  * so the UI updates if the user installs/uninstalls a wallet extension.
  */
-export function useAvailableWallets(): WalletOption[] {
+export function useAvailableWallets(): { wallets: WalletOption[]; loading: boolean } {
   const [wallets, setWallets] = useState<WalletOption[]>([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
@@ -306,8 +334,9 @@ export function useAvailableWallets(): WalletOption[] {
         const list = await listAvailableWallets();
         if (!cancelled) setWallets(list);
       } catch {
-        const fallback = await Promise.all(FALLBACK_WALLETS.map((wallet) => normalizeWallet(wallet)));
-        if (!cancelled) setWallets(sortWallets(fallback));
+        if (!cancelled) setWallets([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     refresh();
@@ -317,5 +346,5 @@ export function useAvailableWallets(): WalletOption[] {
       window.removeEventListener("focus", refresh);
     };
   }, []);
-  return wallets;
+  return { wallets, loading };
 }

@@ -13,7 +13,7 @@ import ProveAttest from './pages/ProveAttest';
 import RoleSelect from './pages/RoleSelect';
 import WalletPicker from './components/WalletPicker';
 import DemoTour from './components/DemoTour';
-import { setConnectedAddress as setStellarAddress, disconnectWallet } from './lib/stellar';
+import { setConnectedAddress as setStellarAddress, getConnectedAddress as getStoredStellarAddress, disconnectWallet } from './lib/stellar';
 import { getQaConfig } from './lib/qa';
 
 export interface ZkState {
@@ -88,7 +88,7 @@ function Home({
 
 function App() {
   const qa = getQaConfig();
-  const [walletAddress, setWalletAddress] = useState<string>(qa?.walletAddress ?? '');
+  const [walletAddress, setWalletAddress] = useState<string>(() => qa?.walletAddress ?? getStoredStellarAddress() ?? '');
   const [pickerOpen, setPickerOpen] = useState<boolean>(false);
 
   // Shared ZK workflow state — passed into FacilityDetail for the four steps.
@@ -109,6 +109,15 @@ function App() {
     }
     metaDescription.content = siteConfig.siteDescription || '';
   }, []);
+
+  useEffect(() => {
+    if (qa?.walletAddress) return;
+
+    const storedAddress = getStoredStellarAddress();
+    if (storedAddress) {
+      setWalletAddress(storedAddress);
+    }
+  }, [qa?.walletAddress]);
 
   // Opens the wallet picker modal. The picker handles the actual connection.
   const handleConnect = () => {

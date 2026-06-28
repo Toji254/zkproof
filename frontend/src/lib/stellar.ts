@@ -36,6 +36,7 @@ interface RawRpcTransactionResponse {
 }
 
 let connectedAddress: string | null = null;
+const CONNECTED_ADDRESS_STORAGE_KEY = 'zkproof_connected_wallet_address';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -652,12 +653,27 @@ export async function getVerificationKeyStatus(): Promise<VerificationKeyStatus>
 // The WalletPicker module calls these to keep the address in sync.
 export function setConnectedAddress(addr: string | null): void {
   connectedAddress = addr;
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+
+  if (addr) {
+    window.localStorage.setItem(CONNECTED_ADDRESS_STORAGE_KEY, addr);
+  } else {
+    window.localStorage.removeItem(CONNECTED_ADDRESS_STORAGE_KEY);
+  }
 }
 export function getConnectedAddress(): string | null {
+  if (connectedAddress) return connectedAddress;
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return null;
+
+  const stored = window.localStorage.getItem(CONNECTED_ADDRESS_STORAGE_KEY);
+  if (stored) {
+    connectedAddress = stored;
+  }
   return connectedAddress;
 }
 export function disconnectWallet(): boolean {
   connectedAddress = null;
   localStorage.removeItem('zkproof_connected_wallet_id');
+  localStorage.removeItem(CONNECTED_ADDRESS_STORAGE_KEY);
   return true;
 }

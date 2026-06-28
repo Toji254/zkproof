@@ -7,7 +7,8 @@
 
 ## Current frontend URL
 
-- Add deployed frontend URL here once live
+- Local demo: http://localhost:3000
+- Public deployment: not published yet
 
 ## Verification key status
 

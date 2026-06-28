@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { StrKey } from '@stellar/stellar-sdk';
 import { facilitiesConfig, navigationConfig } from '../config';
 import {
@@ -8,8 +8,13 @@ import {
   fetchWalletBalances,
   type WalletAssetBalance,
 } from '../lib/stellar';
+import { getQaConfig } from '../lib/qa';
 import { computeCommitment, generateProof } from '../lib/prover';
 import { formatChainThresholdForDisplay, normalizeAttestationInput } from '../lib/attestationMath';
+import { CONTRACT_ID } from '../lib/config';
+import { getStellarExpertContractUrl, getStellarExpertTxUrl, getExplorerNetworkSlug } from '../lib/explorer';
+import { ensureProfile, getLedgerRecords, saveLedgerRecord, type LandlordLedgerRecord } from '../lib/profile';
+import { LEDGER_EXPORT_THEMES, exportLedgerRecordPdf, exportLedgerRecordPng, type LedgerExportThemeId } from '../lib/ledgerExport';
 import type { ZkState } from '../App';
 
 interface FacilityDetailProps {
@@ -28,6 +33,8 @@ type VerificationResult =
       issuedAt: string;
       expiresAt: string;
       proofHash: string;
+      txHash?: string;
+      renterPublicId?: string;
     }
   | {
       valid: false;
@@ -40,29 +47,55 @@ export default function FacilityDetail({
   zkState,
   setZkState,
 }: FacilityDetailProps) {
+  const qa = getQaConfig();
+  const facilityQa = qa?.facility;
+  const suppressNetwork = qa?.suppressNetwork ?? false;
+  const location = useLocation();
   const { slug } = useParams<{ slug: string }>();
+  const landlordProfile = useMemo(() => ensureProfile('landlord'), []);
+  const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const sharedVerifyAddress = query.get('address') ?? '';
+  const sharedVerifyType = (query.get('type') as 'income' | 'balance' | 'credit' | null) ?? null;
+  const sharedRenterPublicId = query.get('publicId') ?? '';
+  const sharedLandlordPublicId = query.get('landlordId') ?? '';
+  const sharedTxHash = query.get('tx') ?? '';
 
   // Form Inputs
   const [formData, setFormData] = useState({
-    income: zkState.income,
-    balance: zkState.balance,
-    creditScore: zkState.creditScore,
-    selectedAssetId: zkState.selectedAssetId,
-    attestationType: zkState.attestationType,
-    threshold: zkState.threshold,
-    verifyAddress: walletAddress || '',
-    verifyType: zkState.attestationType,
+    income: facilityQa?.formData?.income ?? zkState.income,
+    balance: facilityQa?.formData?.balance ?? zkState.balance,
+    creditScore: facilityQa?.formData?.creditScore ?? zkState.creditScore,
+    selectedAssetId: facilityQa?.formData?.selectedAssetId ?? zkState.selectedAssetId,
+    attestationType: facilityQa?.formData?.attestationType ?? zkState.attestationType,
+    threshold: facilityQa?.formData?.threshold ?? zkState.threshold,
+    verifyAddress:
+      facilityQa?.formData?.verifyAddress ?? sharedVerifyAddress ?? walletAddress ?? '',
+    verifyType: facilityQa?.formData?.verifyType ?? sharedVerifyType ?? zkState.attestationType,
   });
 
   // UI Actions & Logs State
   const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [progress, setProgress] = useState(0);
+  const [logs, setLogs] = useState<string[]>(facilityQa?.logs ?? []);
+  const [progress, setProgress] = useState(facilityQa?.progress ?? 0);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [walletAssets, setWalletAssets] = useState<WalletAssetBalance[]>([]);
   const [walletAssetError, setWalletAssetError] = useState<string>('');
   const [walletAssetsLoading, setWalletAssetsLoading] = useState(false);
+  const [savedLedgerRecords, setSavedLedgerRecords] = useState<LandlordLedgerRecord[]>(() => getLedgerRecords());
+  const [ledgerSavedMessage, setLedgerSavedMessage] = useState('');
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerExported, setLedgerExported] = useState(false);
+  const [selectedLedgerThemes, setSelectedLedgerThemes] = useState<Record<string, LedgerExportThemeId>>({});
+  const [ledgerExportMessage, setLedgerExportMessage] = useState('');
+  const [exportingRecordId, setExportingRecordId] = useState<string | null>(null);
+  const [requestCopied, setRequestCopied] = useState(false);
   const commitmentStatusRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (facilityQa?.verificationResult) {
+      setVerificationResult(facilityQa.verificationResult as VerificationResult);
+    }
+  }, [facilityQa?.verificationResult]);
 
   const facility = useMemo(
     () => facilitiesConfig.items.find((item) => item.slug === slug) ?? null,
@@ -85,6 +118,7 @@ export default function FacilityDetail({
   }, [walletAddress, formData.verifyAddress]);
 
   useEffect(() => {
+    if (suppressNetwork) return;
     let cancelled = false;
 
     const loadWalletAssets = async () => {
@@ -148,7 +182,7 @@ export default function FacilityDetail({
     return () => {
       cancelled = true;
     };
-  }, [walletAddress, zkState.selectedAssetId, zkState.attestationType, setZkState]);
+  }, [walletAddress, zkState.selectedAssetId, zkState.attestationType, setZkState, suppressNetwork]);
 
   useEffect(() => {
     if (formData.attestationType !== 'balance' || !selectedWalletAsset) return;
@@ -207,6 +241,106 @@ export default function FacilityDetail({
   const addLog = (text: string) => {
     const time = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${time}] ${text}`]);
+  };
+
+  const verificationTxHash = verificationResult?.valid
+    ? verificationResult.txHash ?? sharedTxHash ?? zkState.txHash ?? ''
+    : '';
+  const verificationTxUrl = verificationTxHash ? getStellarExpertTxUrl(verificationTxHash) : '';
+  const verificationContractUrl = CONTRACT_ID ? getStellarExpertContractUrl(CONTRACT_ID) : '';
+  const landlordRequestUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/prove?landlordId=${encodeURIComponent(landlordProfile.publicId)}&type=${encodeURIComponent(formData.verifyType)}`
+    : `/prove?landlordId=${encodeURIComponent(landlordProfile.publicId)}&type=${encodeURIComponent(formData.verifyType)}`;
+  const landlordRequestMessage = [
+    `ProofPass landlord ID: ${landlordProfile.publicId}`,
+    `Requested attestation type: ${formData.verifyType}`,
+    `Renter prove link: ${landlordRequestUrl}`,
+  ].join('\n');
+  const filteredLedgerRecords = savedLedgerRecords.filter((record) => {
+    const queryText = ledgerSearch.trim().toLowerCase();
+    if (!queryText) return true;
+
+    return [
+      record.renterPublicId,
+      record.renterWalletAddress,
+      record.attestationType,
+      record.threshold,
+      record.txHash ?? '',
+    ].some((value) => value.toLowerCase().includes(queryText));
+  });
+
+  const handleSaveLedgerRecord = () => {
+    if (!verificationResult || !verificationResult.valid) return;
+
+    const saved = saveLedgerRecord({
+      landlordPublicId: landlordProfile.publicId,
+      renterPublicId: verificationResult.renterPublicId ?? sharedRenterPublicId ?? 'UNKNOWN',
+      renterWalletAddress: verificationResult.address,
+      attestationType: verificationResult.type,
+      threshold: verificationResult.threshold,
+      issuedAt: verificationResult.issuedAt,
+      expiresAt: verificationResult.expiresAt,
+      proofHash: verificationResult.proofHash,
+      txHash: verificationTxHash || undefined,
+      contractId: CONTRACT_ID || undefined,
+      network: getExplorerNetworkSlug(),
+    });
+
+    setSavedLedgerRecords(getLedgerRecords());
+    setLedgerSavedMessage(`Saved ${saved.renterPublicId} to landlord ledger.`);
+    window.setTimeout(() => setLedgerSavedMessage(''), 2400);
+  };
+
+  const handleExportLedger = () => {
+    if (savedLedgerRecords.length === 0) return;
+
+    const blob = new Blob([JSON.stringify(savedLedgerRecords, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `proofpass-landlord-ledger-${landlordProfile.publicId}.json`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    setLedgerExported(true);
+    window.setTimeout(() => setLedgerExported(false), 2000);
+  };
+
+  const handleCopyRequest = async () => {
+    try {
+      await navigator.clipboard.writeText(landlordRequestMessage);
+      setRequestCopied(true);
+      window.setTimeout(() => setRequestCopied(false), 2000);
+    } catch {
+      setRequestCopied(false);
+    }
+  };
+
+  const getLedgerTheme = (recordId: string): LedgerExportThemeId => selectedLedgerThemes[recordId] ?? 'noir';
+
+  const setLedgerTheme = (recordId: string, themeId: LedgerExportThemeId) => {
+    setSelectedLedgerThemes((prev) => ({ ...prev, [recordId]: themeId }));
+  };
+
+  const handleExportLedgerAsset = async (record: LandlordLedgerRecord, format: 'png' | 'pdf') => {
+    const themeId = getLedgerTheme(record.id);
+    setExportingRecordId(record.id);
+    setLedgerExportMessage('');
+
+    try {
+      if (format === 'png') {
+        await exportLedgerRecordPng(record, themeId);
+      } else {
+        await exportLedgerRecordPdf(record, themeId);
+      }
+      setLedgerExportMessage(`Exported ${record.renterPublicId} as ${format.toUpperCase()} (${themeId}).`);
+      window.setTimeout(() => setLedgerExportMessage(''), 2400);
+    } catch (error) {
+      console.error(error);
+      setLedgerExportMessage(`Could not export ${format.toUpperCase()} right now.`);
+      window.setTimeout(() => setLedgerExportMessage(''), 2400);
+    } finally {
+      setExportingRecordId(null);
+    }
   };
 
   // ── Step 1: Generate Poseidon Commitment ──
@@ -448,6 +582,8 @@ export default function FacilityDetail({
           issuedAt: new Date(attestation.issuedAt * 1000).toLocaleString(),
           expiresAt: new Date(attestation.expiresAt * 1000).toLocaleString(),
           proofHash: attestation.proofHash,
+          txHash: sharedTxHash || zkState.txHash || undefined,
+          renterPublicId: sharedRenterPublicId || undefined,
         });
       } else {
         addLog('Contract returned: no valid attestation found.');
@@ -964,7 +1100,7 @@ export default function FacilityDetail({
 
             {/* Step 4 Form: Verify Attestation */}
             {slug === 'verify' && (
-              <div className="glass-card" style={{ padding: '32px', border: '1px solid rgba(136,153,170,0.1)' }}>
+              <div id="landlord-verification-portal" className="glass-card" style={{ padding: '32px', border: '1px solid rgba(136,153,170,0.1)' }}>
                 <h3 style={{ textTransform: 'uppercase', fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px', color: '#00d4aa' }}>
                   Landlord Verification Portal
                 </h3>
@@ -972,6 +1108,66 @@ export default function FacilityDetail({
                 <p style={{ marginTop: 0, marginBottom: '20px', fontSize: '11px', color: '#8899aa', lineHeight: 1.6 }}>
                   This result is verified on Stellar without revealing the renter&apos;s private financial data.
                 </p>
+
+                <div style={{ display: 'grid', gap: '10px', marginBottom: '20px' }}>
+                  <div style={{ padding: '12px', background: 'rgba(136, 153, 170, 0.06)', border: '1px solid rgba(136,153,170,0.14)' }}>
+                    <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Landlord public ID
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#ffffff', fontWeight: 700, letterSpacing: '0.08em' }}>
+                      {landlordProfile.publicId}
+                    </div>
+                  </div>
+                  <div style={{ padding: '12px', background: 'rgba(0, 212, 170, 0.05)', border: '1px solid rgba(0,212,170,0.16)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>
+                        Share landlord request
+                      </div>
+                      <button
+                        onClick={handleCopyRequest}
+                        style={{
+                          padding: '8px 12px',
+                          background: 'transparent',
+                          border: '1px solid rgba(0,212,170,0.24)',
+                          color: requestCopied ? '#00d4aa' : '#e8ecf1',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        {requestCopied ? 'Copied request' : 'Copy renter request'}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#8899aa', lineHeight: 1.6, marginBottom: '8px' }}>
+                      Send this to the renter so they know which landlord ID the proof is for and land directly in the prove flow.
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#00d4aa', wordBreak: 'break-all', lineHeight: 1.6 }}>
+                      {landlordRequestUrl}
+                    </div>
+                  </div>
+                  {sharedLandlordPublicId && sharedLandlordPublicId !== landlordProfile.publicId && (
+                    <div style={{ padding: '12px', background: 'rgba(255, 170, 0, 0.06)', border: '1px solid rgba(255,170,0,0.18)' }}>
+                      <div style={{ fontSize: '10px', color: '#ffcc66', textTransform: 'uppercase', marginBottom: '4px' }}>
+                        Intended landlord ID in shared link
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#e8ecf1', lineHeight: 1.6 }}>
+                        This proof link was prepared for landlord ID <span style={{ color: '#ffcc66', fontWeight: 700 }}>{sharedLandlordPublicId}</span>, but this browser is currently using landlord ID <span style={{ color: '#ffffff', fontWeight: 700 }}>{landlordProfile.publicId}</span>.
+                      </div>
+                    </div>
+                  )}
+                  {sharedRenterPublicId && (
+                    <div style={{ padding: '12px', background: 'rgba(0, 212, 170, 0.05)', border: '1px solid rgba(0,212,170,0.16)' }}>
+                      <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '4px' }}>
+                        Shared renter public ID
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.08em' }}>
+                        {sharedRenterPublicId}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: '#8899aa', marginBottom: '8px', textTransform: 'uppercase' }}>
@@ -1041,6 +1237,12 @@ export default function FacilityDetail({
                         </div>
                         <table style={{ width: '100%', fontSize: '11px', color: '#8899aa', borderCollapse: 'collapse' }}>
                           <tbody>
+                            {verificationResult.renterPublicId && (
+                              <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
+                                <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Renter public ID:</td>
+                                <td style={{ padding: '6px 0', color: '#00d4aa', textAlign: 'right', fontWeight: 700 }}>{verificationResult.renterPublicId}</td>
+                              </tr>
+                            )}
                             <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
                               <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Requirement:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', fontWeight: 600 }}>{verificationResult.type}</td>
@@ -1057,12 +1259,62 @@ export default function FacilityDetail({
                               <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Expires:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right' }}>{verificationResult.expiresAt}</td>
                             </tr>
+                            <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Wallet reference:</td>
+                              <td style={{ padding: '6px 0', textAlign: 'right', wordBreak: 'break-all', color: '#e8ecf1' }}>
+                                {verificationResult.address}
+                              </td>
+                            </tr>
+                            {verificationTxHash && (
+                              <tr style={{ borderBottom: '1px solid rgba(136,153,170,0.1)' }}>
+                                <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Transaction hash:</td>
+                                <td style={{ padding: '6px 0', textAlign: 'right', wordBreak: 'break-all' }}>
+                                  <a href={verificationTxUrl} target="_blank" rel="noreferrer" style={{ color: '#00d4aa', textDecoration: 'underline' }}>{verificationTxHash}</a>
+                                </td>
+                              </tr>
+                            )}
                             <tr>
-                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>Network proof:</td>
+                              <td style={{ padding: '6px 0', textTransform: 'uppercase' }}>On-chain proof hash:</td>
                               <td style={{ padding: '6px 0', color: '#e8ecf1', textAlign: 'right', wordBreak: 'break-all' }}>{verificationResult.proofHash}</td>
                             </tr>
                           </tbody>
                         </table>
+
+                        <div style={{ display: 'grid', gap: '10px', marginTop: '16px' }}>
+                          <button
+                            onClick={handleSaveLedgerRecord}
+                            style={{
+                              width: '100%',
+                              padding: '12px 0',
+                              background: '#00d4aa',
+                              color: '#050a0f',
+                              border: 'none',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              cursor: 'pointer',
+                              fontFamily: "'IBM Plex Mono', monospace",
+                            }}
+                          >
+                            Save renter attestation to landlord ledger
+                          </button>
+                          {ledgerSavedMessage && (
+                            <div style={{ fontSize: '10px', color: '#00d4aa', textAlign: 'center' }}>{ledgerSavedMessage}</div>
+                          )}
+                          <div style={{ fontSize: '10px', color: '#556677', textAlign: 'center', lineHeight: 1.6 }}>
+                            We show the renter wallet as a reference only here to avoid exposing their full wallet activity in Stellar Expert.
+                          </div>
+                          {verificationTxHash && (
+                            <a href={verificationTxUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline', textAlign: 'center' }}>
+                              View verification transaction on Stellar Expert ↗
+                            </a>
+                          )}
+                          {CONTRACT_ID && (
+                            <a href={verificationContractUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline', textAlign: 'center' }}>
+                              View attestation contract on Stellar Expert ↗
+                            </a>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div style={{ padding: '18px', background: 'rgba(255, 68, 102, 0.08)', border: '1px solid #ff4466' }}>
@@ -1086,6 +1338,193 @@ export default function FacilityDetail({
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {savedLedgerRecords.length > 0 && (
+                  <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid rgba(136,153,170,0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>
+                          Saved landlord ledger records
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#556677', lineHeight: 1.6, maxWidth: '640px' }}>
+                          Each saved attestation now doubles as a polished share artifact. Pick a visual theme, then export a renter-ready PNG or a PDF audit copy.
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleExportLedger}
+                        style={{
+                          padding: '8px 12px',
+                          background: 'transparent',
+                          border: '1px solid rgba(0,212,170,0.24)',
+                          color: ledgerExported ? '#00d4aa' : '#e8ecf1',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                        }}
+                      >
+                        {ledgerExported ? 'Exported backup' : 'Export raw JSON backup'}
+                      </button>
+                    </div>
+                    {ledgerExportMessage && (
+                      <div style={{ marginBottom: '12px', fontSize: '10px', color: '#00d4aa' }}>{ledgerExportMessage}</div>
+                    )}
+                    <div style={{ marginBottom: '12px' }}>
+                      <input
+                        type="text"
+                        placeholder="Search renter ID, wallet, type, threshold, tx..."
+                        value={ledgerSearch}
+                        onChange={(e) => setLedgerSearch(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          background: '#050a0f',
+                          border: '1px solid rgba(136,153,170,0.15)',
+                          color: '#e8ecf1',
+                          fontFamily: "'IBM Plex Mono', monospace",
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#556677', marginBottom: '12px' }}>
+                      {filteredLedgerRecords.length} of {savedLedgerRecords.length} record{savedLedgerRecords.length === 1 ? '' : 's'} shown
+                    </div>
+                    <div style={{ display: 'grid', gap: '16px' }}>
+                      {filteredLedgerRecords.map((record) => {
+                        const activeTheme = getLedgerTheme(record.id);
+                        const isExporting = exportingRecordId === record.id;
+                        return (
+                          <div key={record.id} style={{ padding: '18px', background: 'linear-gradient(180deg, rgba(11,18,26,0.96) 0%, rgba(5,10,15,0.98) 100%)', border: '1px solid rgba(136,153,170,0.14)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>Saved attestation</div>
+                                <div style={{ fontSize: '16px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '6px' }}>{record.renterPublicId}</div>
+                                <div style={{ fontSize: '11px', color: '#e8ecf1', lineHeight: 1.6 }}>
+                                  {record.attestationType.toUpperCase()} qualification • {record.threshold}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#556677', textAlign: 'right', lineHeight: 1.7 }}>
+                                saved {new Date(record.savedAt).toLocaleString()}<br />
+                                expires {record.expiresAt}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(320px, 1fr)', gap: '16px' }}>
+                              <div style={{ padding: '16px', background: 'rgba(8,17,26,0.92)', border: '1px solid rgba(0,212,170,0.12)' }}>
+                                <div style={{ display: 'grid', gap: '12px' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
+                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Renter ID</span>
+                                    <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 700 }}>{record.renterPublicId}</span>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
+                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Landlord ID</span>
+                                    <span style={{ fontSize: '11px', color: '#e8ecf1', fontWeight: 700 }}>{record.landlordPublicId}</span>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
+                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Wallet reference</span>
+                                    <span style={{ fontSize: '11px', color: '#e8ecf1', wordBreak: 'break-all' }}>{record.renterWalletAddress}</span>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
+                                    <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase' }}>Audit links</span>
+                                    <span style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                                      {record.txHash && (
+                                        <a href={getStellarExpertTxUrl(record.txHash)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
+                                          tx ↗
+                                        </a>
+                                      )}
+                                      {record.contractId && (
+                                        <a href={getStellarExpertContractUrl(record.contractId)} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#00d4aa', textDecoration: 'underline' }}>
+                                          contract ↗
+                                        </a>
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(136,153,170,0.12)' }}>
+                                <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '10px' }}>
+                                  Choose share card theme
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px', marginBottom: '14px' }}>
+                                  {LEDGER_EXPORT_THEMES.map((theme) => {
+                                    const active = activeTheme === theme.id;
+                                    return (
+                                      <button
+                                        key={theme.id}
+                                        onClick={() => setLedgerTheme(record.id, theme.id)}
+                                        style={{
+                                          padding: '12px',
+                                          border: active ? `1px solid ${theme.accent}` : '1px solid rgba(136,153,170,0.14)',
+                                          background: `linear-gradient(180deg, ${theme.panel} 0%, ${theme.panelAlt} 100%)`,
+                                          cursor: 'pointer',
+                                          textAlign: 'left',
+                                        }}
+                                      >
+                                        <div style={{ height: '54px', border: `1px solid ${theme.deco}`, background: `radial-gradient(circle at top right, ${theme.accent}33 0%, transparent 45%), linear-gradient(180deg, ${theme.panelAlt} 0%, ${theme.panel} 100%)`, marginBottom: '10px' }} />
+                                        <div style={{ fontSize: '10px', color: active ? theme.accent : '#e8ecf1', textTransform: 'uppercase', fontWeight: 700 }}>{theme.name}</div>
+                                        <div style={{ fontSize: '9px', color: '#556677', marginTop: '4px', lineHeight: 1.5 }}>
+                                          {theme.id === 'noir' ? 'Closest to the app UI' : theme.id === 'emerald' ? 'Certificate-style handoff' : 'Exchange-card style snapshot'}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+                                  <button
+                                    onClick={() => handleExportLedgerAsset(record, 'png')}
+                                    disabled={isExporting}
+                                    style={{
+                                      padding: '10px 12px',
+                                      background: '#00d4aa',
+                                      color: '#050a0f',
+                                      border: 'none',
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      cursor: isExporting ? 'wait' : 'pointer',
+                                      fontFamily: "'IBM Plex Mono', monospace",
+                                      opacity: isExporting ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {isExporting ? 'Exporting…' : 'Export PNG card'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleExportLedgerAsset(record, 'pdf')}
+                                    disabled={isExporting}
+                                    style={{
+                                      padding: '10px 12px',
+                                      background: 'transparent',
+                                      color: '#e8ecf1',
+                                      border: '1px solid rgba(136,153,170,0.18)',
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      cursor: isExporting ? 'wait' : 'pointer',
+                                      fontFamily: "'IBM Plex Mono', monospace",
+                                      opacity: isExporting ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {isExporting ? 'Preparing…' : 'Export PDF copy'}
+                                  </button>
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#556677', marginTop: '10px', lineHeight: 1.6 }}>
+                                  PNG is for renter/landlord sharing. PDF is for a more formal audit-style copy. JSON remains available as the raw backup export above.
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {filteredLedgerRecords.length === 0 && (
+                        <div style={{ padding: '14px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.12)', fontSize: '10px', color: '#556677', lineHeight: 1.6 }}>
+                          No saved ledger records match this search yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

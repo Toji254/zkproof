@@ -70,14 +70,19 @@ const STEPS: TourStep[] = [
     title: 'Landlord Verification',
     description:
       "This is the landlord view. Paste the renter wallet address, choose the requirement type, and click Check. The landlord sees only QUALIFIED or NOT QUALIFIED - no salary, no bank data.",
-    targetId: '#check-attestation-btn',
+    targetId: '#landlord-verification-portal',
     path: '/facility/verify',
-    delay: 500,
-    autoAdvanceMs: 8000,
+    scrollTo: 'landlord-verification-portal',
+    delay: 900,
+    autoAdvanceMs: 8500,
     action: (addr) => {
       if (!addr) return;
       const el = document.getElementById('verify-address-input') as HTMLInputElement | null;
-      if (el && !el.value) el.value = addr;
+      if (!el || el.value) return;
+      const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      descriptor?.set?.call(el, addr);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
     },
   },
   {
