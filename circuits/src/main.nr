@@ -87,6 +87,123 @@ fn main(
 }
 
 // -------------------------------------------------------
+// Multi-month income stability proof (additive -- main() unchanged)
+// -------------------------------------------------------
+// Proves the average monthly income over 6 months exceeds a threshold
+// AND every individual month meets a stability floor (e.g. 70% of threshold).
+// All amounts are private; only threshold, floor ratio, and a composite
+// Poseidon commitment are public.
+//
+// Private inputs (witness -- never revealed):
+//   - monthly_incomes: 6 monthly income values
+//   - data_source_secret: secret used in the commitment
+//
+// Public inputs (visible on-chain):
+//   - minimum_threshold: e.g. 3000 (income > threshold required on average)
+//   - attestation_type: must be 1 (income) -- kept for backwards compat
+//   - timestamp: unix seconds
+//   - data_commitment: Poseidon(secret, sum_of_incomes)
+//   - floor_ratio_bps: stability floor in basis points (e.g. 7000 = 70%)
+fn main_multi(
+    minimum_threshold: Field,
+    attestation_type: Field,
+    timestamp: Field,
+    data_commitment: Field,
+    floor_ratio_bps: Field,
+    monthly_incomes: [Field; 6],
+    data_source_secret: Field,
+) {
+    let threshold_val = minimum_threshold as u64;
+    let att_type = attestation_type as u64;
+    let ts = timestamp as u64;
+    let ratio = floor_ratio_bps as u64;
+
+    assert(threshold_val > 0, "Threshold must be positive");
+    assert(att_type >= 1, "Attestation type must be >= 1");
+    assert(att_type <= 3, "Attestation type must be <= 3");
+    assert(ts > 1704067200, "Timestamp must be after Jan 1 2024");
+    assert(ratio > 0, "Floor ratio must be positive");
+    assert(ratio <= 10000, "Floor ratio must be <= 10000 bps");
+
+    let floor = (threshold_val * ratio) / 10000;
+
+    let mut sum: u64 = 0;
+    for i in 0..6 {
+        let m = monthly_incomes[i] as u64;
+        assert(m < 10_000_000, "Monthly income out of range");
+        assert(m >= floor, "Monthly income below stability floor");
+        sum = sum + m;
+    }
+    let avg = sum / 6;
+    assert(avg > threshold_val, "Average income must exceed threshold");
+
+    let sum_field: Field = sum as Field;
+    let computed = bn254::hash_2([data_source_secret, sum_field]);
+    assert(computed == data_commitment, "Data commitment mismatch");
+}
+
+#[test]
+fn test_multi_stable_passes() {
+    let incomes: [Field; 6] = [5000, 5200, 5100, 5300, 5000, 5150];
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 1;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut sum: Field = 0;
+    for i in 0..6 { sum = sum + incomes[i]; }
+    let commitment = bn254::hash_2([secret, sum]);
+    main_multi(threshold, att_type, ts, commitment, ratio, incomes, secret);
+}
+
+#[test(should_fail_with = "Average income must exceed threshold")]
+fn test_multi_avg_too_low() {
+    // 6 months at 4000 each: avg=4000, threshold=3000 -> avg passes
+    // but one month is 150, threshold floor (3000*7000/10000) = 2100 -> floor fires first
+    // to assert avg assertion we need to keep floor satisfied: all months >= 2100
+    let incomes: [Field; 6] = [2100, 2100, 2100, 2100, 2100, 2100]; // avg 2100, threshold 3000
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 1;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut sum: Field = 0;
+    for i in 0..6 { sum = sum + incomes[i]; }
+    let commitment = bn254::hash_2([secret, sum]);
+    main_multi(threshold, att_type, ts, commitment, ratio, incomes, secret);
+}
+
+#[test(should_fail_with = "Monthly income below stability floor")]
+fn test_multi_one_bad_month() {
+    // average passes threshold but one month below 70% floor
+    let incomes: [Field; 6] = [5000, 5200, 5100, 5300, 5000, 200];
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 1;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut sum: Field = 0;
+    for i in 0..6 { sum = sum + incomes[i]; }
+    let commitment = bn254::hash_2([secret, sum]);
+    main_multi(threshold, att_type, ts, commitment, ratio, incomes, secret);
+}
+
+#[test(should_fail_with = "Data commitment mismatch")]
+fn test_multi_commitment_mismatch() {
+    let incomes: [Field; 6] = [5000, 5200, 5100, 5300, 5000, 5150];
+    let secret: Field = 42;
+    let wrong_secret: Field = 99;
+    let threshold: Field = 3000;
+    let att_type: Field = 1;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut sum: Field = 0;
+    for i in 0..6 { sum = sum + incomes[i]; }
+    let commitment = bn254::hash_2([wrong_secret, sum]);
+    main_multi(threshold, att_type, ts, commitment, ratio, incomes, secret);
+}
+
+// -------------------------------------------------------
 // TEST: Verify the circuit works with known values
 // -------------------------------------------------------
 #[test]
