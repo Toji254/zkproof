@@ -341,6 +341,8 @@ fn attestation_type_to_u64(t: &Symbol) -> u64 {
         2
     } else if *t == symbol_short!("credit") {
         3
+    } else if *t == symbol_short!("qualif") {
+        4
     } else {
         0
     }
