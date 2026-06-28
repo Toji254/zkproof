@@ -1,14 +1,14 @@
 /**
- * LandlordMarket — marketplace of qualified renters.
+ * LandlordMarket — marketplace of qualified renters + landlord unit postings.
  *
  * Pulls from two local sources:
  *   1. The landlord's ledger (`getLedgerRecords`) — every renter the landlord
- *      has accepted/verified becomes a "qualified renter" entry in the market.
- *   2. The landlord's own unit listings (`listListings`) — units the landlord
- *      has posted appear at the top with their threshold.
+ *      has accepted becomes a "qualified renter" entry.
+ *   2. The landlord's own unit listings (`listListings`) — units posted with
+ *      threshold + rent + city.
  *
- * This is the "killer demo screen" judges remember: a single page that shows
- * the product actually working as a marketplace, not just a verifier call.
+ * Design system: matches the rest of the app (IBM Plex Mono + Geist Pixel
+ * titles, #050a0f bg, #00d4aa accent, glass-card panels).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -20,6 +20,15 @@ import { CONTRACT_ID } from '../lib/config';
 interface Props {
   walletAddress: string;
 }
+
+const ACCENT = '#00d4aa';
+const BG = '#050a0f';
+const BG_CARD = 'rgba(13, 22, 32, 0.8)';
+const BORDER = 'rgba(255, 255, 255, 0.08)';
+const TEXT = '#e8ecf1';
+const MUTED = '#8899aa';
+const SUCCESS = '#00d4aa';
+const FONT = "'IBM Plex Mono', 'Menlo', monospace";
 
 function shortAddr(a: string): string {
   if (!a) return '—';
@@ -36,7 +45,6 @@ export default function LandlordMarket({ walletAddress }: Props) {
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [ledgerRecords, setLedgerRecords] = useState<LandlordLedgerRecord[]>([]);
 
-  // Form state for posting a new unit listing
   const [unitName, setUnitName] = useState('');
   const [rentDisplay, setRentDisplay] = useState('');
   const [thresholdDisplay, setThresholdDisplay] = useState('');
@@ -75,136 +83,512 @@ export default function LandlordMarket({ walletAddress }: Props) {
     setListings(listings.filter((l) => l.id !== id));
   };
 
+  const inputBase: React.CSSProperties = {
+    width: '100%',
+    boxSizing: 'border-box',
+    background: 'rgba(255,255,255,0.03)',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    padding: '10px 12px',
+    fontFamily: FONT,
+    fontSize: 13,
+    color: TEXT,
+    outline: 'none',
+  };
+
+  const labelBase: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    fontFamily: FONT,
+    fontSize: 10,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: MUTED,
+    marginBottom: 14,
+  };
+
   return (
-    <section className="page">
-      <header className="page-header">
-        <h1>Landlord Market</h1>
-        <p className="lead">
-          Renters who have proven qualification, and units that landlords have posted. Everything
-          lives on Stellar; this view is just the local mirror.
-        </p>
-        {walletAddress && (
-          <p className="meta">
-            Logged in as <strong>{landlordProfile.publicId}</strong> · {shortAddr(walletAddress)}
+    <section
+      style={{
+        position: 'relative',
+        minHeight: '100vh',
+        background: BG,
+        color: TEXT,
+        fontFamily: FONT,
+        padding: '120px 24px 80px',
+      }}
+    >
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: 48 }}>
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.3em',
+              color: ACCENT,
+              textTransform: 'uppercase',
+              marginBottom: 16,
+            }}
+          >
+            ProofPass · Landlord
+          </div>
+          <h1
+            style={{
+              fontFamily: "'Geist Pixel', monospace",
+              fontSize: 'clamp(28px, 4.5vw, 48px)',
+              fontWeight: 400,
+              lineHeight: 1.05,
+              textTransform: 'uppercase',
+              letterSpacing: '0.01em',
+              color: '#fff',
+              margin: '0 0 16px',
+              maxWidth: '22ch',
+            }}
+          >
+            Landlord market
+          </h1>
+          <p
+            style={{
+              fontFamily: FONT,
+              fontSize: 14,
+              lineHeight: 1.7,
+              color: MUTED,
+              maxWidth: '64ch',
+              margin: 0,
+            }}
+          >
+            Post a unit. See every renter who has already proven qualification for
+            your threshold. Inspect the underlying attestation on Stellar Expert —
+            without ever seeing the renter's actual numbers.
           </p>
-        )}
-      </header>
-
-      <div className="market-grid">
-        <div className="market-col">
-          <h2>Your posted units</h2>
-          <form onSubmit={onPost} className="post-form">
-            <label>
-              Unit name
-              <input
-                type="text"
-                placeholder="2BR apartment, Westlands"
-                value={unitName}
-                onChange={(e) => setUnitName(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Rent (display)
-              <input
-                type="text"
-                placeholder="KSh 80,000 / month"
-                value={rentDisplay}
-                onChange={(e) => setRentDisplay(e.target.value)}
-              />
-            </label>
-            <label>
-              Threshold (display)
-              <input
-                type="text"
-                placeholder="Income ≥ 3000"
-                value={thresholdDisplay}
-                onChange={(e) => setThresholdDisplay(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              City
-              <input
-                type="text"
-                placeholder="Nairobi"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-              />
-            </label>
-            <button type="submit" className="cta">Post unit</button>
-          </form>
-
-          {listings.length === 0 ? (
-            <p className="empty">No units posted yet. Use the form above to add one.</p>
-          ) : (
-            <ul className="listing-list">
-              {listings.map((l) => (
-                <li key={l.id} className="listing-card">
-                  <header>
-                    <strong>{l.unitName}</strong>
-                    <span className="city">{l.city}</span>
-                  </header>
-                  <dl>
-                    <dt>Rent</dt><dd>{l.rentDisplay}</dd>
-                    <dt>Threshold</dt><dd>{l.thresholdDisplay}</dd>
-                    <dt>Landlord</dt><dd>{l.landlordPublicId}</dd>
-                  </dl>
-                  <button type="button" className="ghost" onClick={() => onRemove(l.id)}>
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {walletAddress && (
+            <div
+              style={{
+                marginTop: 20,
+                fontFamily: FONT,
+                fontSize: 11,
+                color: MUTED,
+                letterSpacing: '0.06em',
+              }}
+            >
+              Logged in as <span style={{ color: ACCENT }}>{landlordProfile.publicId}</span>
+              <span style={{ margin: '0 8px', color: 'rgba(255,255,255,0.2)' }}>·</span>
+              <span style={{ color: TEXT }}>{shortAddr(walletAddress)}</span>
+            </div>
           )}
         </div>
 
-        <div className="market-col">
-          <h2>Qualified renters</h2>
-          {qualifiedRenters.length === 0 ? (
-            <p className="empty">
-              No qualifying renters in your ledger yet. Run the verifier flow on a renter
-              address and save the result to start filling this list.
-            </p>
-          ) : (
-            <ul className="renter-list">
-              {qualifiedRenters.map((r) => {
-                const expires = new Date(r.expiresAt);
-                const txUrl = r.txHash ? getStellarExpertTxUrl(r.txHash) : null;
-                return (
-                  <li key={r.id} className="renter-card">
-                    <header>
-                      <span className="status qualified">Qualified</span>
-                      <span className="threshold">{r.threshold}</span>
-                    </header>
-                    <dl>
-                      <dt>Renter ID</dt><dd>{r.renterPublicId || '—'}</dd>
-                      <dt>Wallet</dt><dd className="mono">{shortAddr(r.renterWalletAddress)}</dd>
-                      <dt>Type</dt><dd>{r.attestationType}</dd>
-                      <dt>Expires</dt><dd>{Number.isFinite(expires.getTime()) ? expires.toLocaleDateString() : '—'}</dd>
-                      <dt>Proof TX</dt>
-                      <dd>
-                        {txUrl ? (
-                          <a href={txUrl} target="_blank" rel="noreferrer">View on Stellar Expert ↗</a>
-                        ) : (
-                          <span className="muted">no tx hash saved</span>
-                        )}
-                      </dd>
-                      <dt>Contract</dt><dd className="mono">{shortAddr(r.contractId || CONTRACT_ID)}</dd>
-                    </dl>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        {/* Two-column grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)',
+            gap: 32,
+            alignItems: 'start',
+          }}
+        >
+          {/* LEFT: post unit + your listings */}
+          <div
+            style={{
+              background: BG_CARD,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 16,
+              padding: 28,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: FONT,
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: ACCENT,
+                margin: '0 0 20px',
+              }}
+            >
+              Post a unit
+            </h2>
+
+            <form onSubmit={onPost}>
+              <label style={labelBase}>
+                Unit name
+                <input
+                  type="text"
+                  placeholder="2BR apartment, Westlands"
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
+                  required
+                  style={inputBase}
+                />
+              </label>
+              <label style={labelBase}>
+                Rent (display)
+                <input
+                  type="text"
+                  placeholder="KSh 80,000 / month"
+                  value={rentDisplay}
+                  onChange={(e) => setRentDisplay(e.target.value)}
+                  style={inputBase}
+                />
+              </label>
+              <label style={labelBase}>
+                Threshold (display)
+                <input
+                  type="text"
+                  placeholder="Income ≥ 3000"
+                  value={thresholdDisplay}
+                  onChange={(e) => setThresholdDisplay(e.target.value)}
+                  required
+                  style={inputBase}
+                />
+              </label>
+              <label style={labelBase}>
+                City
+                <input
+                  type="text"
+                  placeholder="Nairobi"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  style={inputBase}
+                />
+              </label>
+
+              <button
+                type="submit"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '12px 24px',
+                  background: ACCENT,
+                  color: BG,
+                  border: 'none',
+                  borderRadius: 12,
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  marginTop: 4,
+                }}
+              >
+                Post unit
+              </button>
+            </form>
+
+            {listings.length > 0 && (
+              <div style={{ marginTop: 32 }}>
+                <h3
+                  style={{
+                    fontFamily: FONT,
+                    fontSize: 11,
+                    letterSpacing: '0.2em',
+                    textTransform: 'uppercase',
+                    color: MUTED,
+                    margin: '0 0 14px',
+                  }}
+                >
+                  Your posted units
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {listings.map((l) => (
+                    <article
+                      key={l.id}
+                      style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 10,
+                        padding: '14px 16px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          marginBottom: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: FONT,
+                            fontSize: 14,
+                            color: TEXT,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {l.unitName}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: FONT,
+                            fontSize: 11,
+                            color: MUTED,
+                            letterSpacing: '0.06em',
+                          }}
+                        >
+                          {l.city}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 16,
+                          fontFamily: FONT,
+                          fontSize: 11,
+                          color: MUTED,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <span>
+                          Rent · <span style={{ color: TEXT }}>{l.rentDisplay}</span>
+                        </span>
+                        <span>
+                          Threshold · <span style={{ color: ACCENT }}>{l.thresholdDisplay}</span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onRemove(l.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: MUTED,
+                          fontFamily: FONT,
+                          fontSize: 10,
+                          letterSpacing: '0.12em',
+                          textTransform: 'uppercase',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT: qualified renters */}
+          <div
+            style={{
+              background: BG_CARD,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 16,
+              padding: 28,
+              minHeight: 320,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                marginBottom: 20,
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: FONT,
+                  fontSize: 11,
+                  letterSpacing: '0.2em',
+                  textTransform: 'uppercase',
+                  color: ACCENT,
+                  margin: 0,
+                }}
+              >
+                Qualified renters
+              </h2>
+              <span
+                style={{
+                  fontFamily: FONT,
+                  fontSize: 11,
+                  color: MUTED,
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {qualifiedRenters.length} on file
+              </span>
+            </div>
+
+            {qualifiedRenters.length === 0 ? (
+              <div
+                style={{
+                  padding: '32px 20px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.02)',
+                  border: `1px dashed ${BORDER}`,
+                  textAlign: 'center',
+                  fontFamily: FONT,
+                  fontSize: 12,
+                  color: MUTED,
+                  lineHeight: 1.7,
+                }}
+              >
+                No qualifying renters in your ledger yet.
+                <br />
+                Run the verifier flow on a renter address and save the result to
+                start filling this list.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {qualifiedRenters.map((r) => {
+                  const expires = new Date(r.expiresAt);
+                  const txUrl = r.txHash ? getStellarExpertTxUrl(r.txHash) : null;
+                  return (
+                    <article
+                      key={r.id}
+                      style={{
+                        background: 'rgba(0,212,170,0.04)',
+                        border: '1px solid rgba(0,212,170,0.18)',
+                        borderRadius: 10,
+                        padding: '16px 18px',
+                      }}
+                    >
+                      <header
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 14,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '5px 12px',
+                            background: 'rgba(0,212,170,0.14)',
+                            color: SUCCESS,
+                            border: '1px solid rgba(0,212,170,0.30)',
+                            borderRadius: 999,
+                            fontFamily: FONT,
+                            fontSize: 10,
+                            letterSpacing: '0.12em',
+                            textTransform: 'uppercase',
+                            fontWeight: 600,
+                          }}
+                        >
+                          ✓ Qualified
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: FONT,
+                            fontSize: 14,
+                            color: TEXT,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {r.threshold}
+                        </span>
+                      </header>
+
+                      <dl
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '110px 1fr',
+                          rowGap: 8,
+                          columnGap: 16,
+                          margin: 0,
+                          fontFamily: FONT,
+                          fontSize: 12,
+                        }}
+                      >
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Renter ID</dt>
+                        <dd style={{ color: TEXT, margin: 0 }}>{r.renterPublicId || '—'}</dd>
+
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Wallet</dt>
+                        <dd style={{ color: ACCENT, margin: 0 }}>{shortAddr(r.renterWalletAddress)}</dd>
+
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Type</dt>
+                        <dd style={{ color: TEXT, margin: 0, textTransform: 'capitalize' }}>{r.attestationType}</dd>
+
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Expires</dt>
+                        <dd style={{ color: TEXT, margin: 0 }}>
+                          {Number.isFinite(expires.getTime()) ? expires.toLocaleDateString() : '—'}
+                        </dd>
+
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Proof TX</dt>
+                        <dd style={{ margin: 0 }}>
+                          {txUrl ? (
+                            <a
+                              href={txUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                color: ACCENT,
+                                textDecoration: 'none',
+                                fontSize: 12,
+                              }}
+                            >
+                              View on Stellar Expert ↗
+                            </a>
+                          ) : (
+                            <span style={{ color: MUTED, fontSize: 11 }}>no tx hash saved</span>
+                          )}
+                        </dd>
+
+                        <dt style={{ color: MUTED, letterSpacing: '0.06em' }}>Contract</dt>
+                        <dd style={{ color: TEXT, margin: 0 }}>{shortAddr(r.contractId || CONTRACT_ID)}</dd>
+                      </dl>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginTop: 56,
+            paddingTop: 24,
+            borderTop: `1px solid ${BORDER}`,
+            fontFamily: FONT,
+            fontSize: 12,
+            color: MUTED,
+          }}
+        >
+          <Link
+            to="/"
+            style={{
+              color: ACCENT,
+              textDecoration: 'none',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              fontSize: 11,
+            }}
+          >
+            ← home
+          </Link>
+          <span>·</span>
+          <Link
+            to="/facility/verify"
+            style={{
+              color: ACCENT,
+              textDecoration: 'none',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              fontSize: 11,
+            }}
+          >
+            Landlord verify
+          </Link>
         </div>
       </div>
-
-      <footer className="page-footer">
-        <Link to="/">← home</Link>
-        <span> · </span>
-        <Link to="/facility/verify">Landlord verify</Link>
-      </footer>
     </section>
   );
 }
