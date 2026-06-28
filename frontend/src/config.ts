@@ -101,6 +101,7 @@ export const navigationConfig: NavigationConfig = {
     { label: "How It Works", href: "/#facilities" },
     { label: "Prove", href: "/prove" },
     { label: "Qualified Renter", href: "/qualified" },
+    { label: "Landlord Market", href: "/market" },
     { label: "Landlord Verify", href: "/facility/verify" },
   ],
 }
