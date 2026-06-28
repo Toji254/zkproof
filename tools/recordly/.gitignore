@@ -1,0 +1,10 @@
+# Recordly binary is large and not built from source.
+Recordly-linux-x64.AppImage
+Recordly-arm64.dmg
+Recordly-arm64.zip
+Recordly-x64.dmg
+Recordly-x64.zip
+Recordly-windows-x64.exe
+# Generated voice-over and any rendered video go through git LFS later;
+# keep them out of regular git until ready to publish.
+voiceover.mp3
