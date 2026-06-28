@@ -11,6 +11,7 @@ import FacilityDetail from './pages/FacilityDetail';
 import OpsTools from './pages/OpsTools';
 import ProveAttest from './pages/ProveAttest';
 import RoleSelect from './pages/RoleSelect';
+import QualifiedRenter from './pages/QualifiedRenter';
 import WalletPicker from './components/WalletPicker';
 import DemoTour from './components/DemoTour';
 import { setConnectedAddress as setStellarAddress, getConnectedAddress as getStoredStellarAddress, disconnectWallet } from './lib/stellar';
@@ -177,6 +178,7 @@ function App() {
           }
         />
         <Route path="/ops" element={<OpsTools />} />
+        <Route path="/qualified" element={<QualifiedRenter />} />
       </Routes>
 
       <WalletPicker

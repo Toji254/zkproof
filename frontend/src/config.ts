@@ -100,6 +100,7 @@ export const navigationConfig: NavigationConfig = {
     { label: "Why", href: "/#manifesto" },
     { label: "How It Works", href: "/#facilities" },
     { label: "Prove", href: "/prove" },
+    { label: "Qualified Renter", href: "/qualified" },
     { label: "Landlord Verify", href: "/facility/verify" },
   ],
 }
