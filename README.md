@@ -40,12 +40,14 @@ This is why the product is easy to understand beyond crypto: the verifier gets t
 
 ## Live links
 
-- Live demo: add deployed frontend URL here
-- Demo video: add final YouTube link here
-- Testnet contract: https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
-- Judge quickstart: [`docs/JUDGE_QUICKSTART.md`](./docs/JUDGE_QUICKSTART.md)
-- Deployment proof: [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md)
-- Competitive positioning: [`docs/COMPETITIVE_POSITIONING.md`](./docs/COMPETITIVE_POSITIONING.md)
+- **Live demo (Vercel):** https://zkproof.vercel.app *(replace with your actual Vercel URL after `vercel --prod`)*
+- **Testnet contract:** https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
+- **Happy-path tx:** https://stellar.expert/explorer/testnet/tx/d060c741e461738b4ba59413dbb288aee6d4266f40ca69b05e9c929e51cc4943
+- **Demo video:** *(record per `DEMO_SCRIPT.md`, upload to YouTube, paste the URL here)*
+- **Judge quickstart:** [`docs/JUDGE_QUICKSTART.md`](./docs/JUDGE_QUICKSTART.md)
+- **Deployment proof:** [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md)
+- **Competitive positioning:** [`docs/COMPETITIVE_POSITIONING.md`](./docs/COMPETITIVE_POSITIONING.md)
+- **Run locally:** `cd frontend && npm install && NODE_OPTIONS="--max-old-space-size=2048" npm run dev` → http://localhost:3000
 
 ## Demo flow
 
@@ -199,18 +201,27 @@ Recommended sequence:
 
 See [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md) for the deployment checklist and expected outputs.
 
-## Screenshots to ship before submission
-Real product screenshots are captured against the deployed frontend. Until
-those are committed, the most authoritative screenshots of the end-to-end
-flow are the on-chain artefacts below — they prove the full happy path and
-the failure path actually work:
+## Screenshots
+
+Real screenshots from the running app, captured against the deployed frontend:
+
+**Step 1 — Renter enters private data locally**
+![Step 1: renter enters private income and picks a threshold](frontend/public/images/step1-data.jpg)
+
+**Step 2 — Proof generates in the browser**
+![Step 2: ZK proof is generated locally, raw salary never leaves the browser](frontend/public/images/step2-proof.jpg)
+
+**Step 3 — Attestation recorded on Stellar**
+![Step 3: qualification attestation is live on Stellar testnet with tx hash](frontend/public/images/step3-chain.jpg)
+
+**Step 4 — Landlord verifies on-chain**
+![Step 4: landlord portal shows qualified / threshold / expiry without seeing raw data](frontend/public/images/step4-verify.jpg)
+
+## On-chain proof of execution
 
 - Contract: https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
 - Happy-path attestation tx: https://stellar.expert/explorer/testnet/tx/d060c741e461738b4ba59413dbb288aee6d4266f40ca69b05e9c929e51cc4943
-- Live evidence log: [`docs/EVIDENCE.md`](./docs/EVIDENCE.md) — test-flow.sh
-  output, the previously recorded balance attestation, and a live
-  failure-path simulation showing `attest()` returning `false` on an
-  invalid proof without writing any contract state.
+- Live evidence log: [`docs/EVIDENCE.md`](./docs/EVIDENCE.md) — `test-flow.sh` output, the previously recorded balance attestation, and a live failure-path simulation showing `attest()` returning `false` on an invalid proof without writing any contract state.
 
 ## One-command deploy (Vercel)
 
@@ -230,7 +241,7 @@ Required env vars on Vercel:
 ## Demo video
 
 - Script: [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md)
-- Video link: replace with final public URL
+- Video link: *(record the 90-second walkthrough per the script, upload to YouTube, paste the URL here)*
 
 ## Repository structure
 

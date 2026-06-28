@@ -2,7 +2,7 @@
 
 ## Open this first
 
-1. Open the live demo.
+1. Open the live demo at the Vercel URL in the README (or run locally: `cd frontend && npm run dev`).
 2. Keep the renter and landlord story in mind:
    - renter wants to qualify privately
    - landlord wants a yes/no answer
@@ -58,14 +58,11 @@ See [`EVIDENCE.md`](./EVIDENCE.md) for:
   proof, and `get_attestation` for the same `(user, credit)` key stays `null`
   — so the contract genuinely enforces the threshold.
 
-## Live evidence (read this if you can't run anything)
-
-See [`EVIDENCE.md`](./EVIDENCE.md) for:
-- Real `./scripts/test-flow.sh` output against the deployed contract
-- The previously recorded happy-path attestation tx (with stellar.expert link)
-- A live failure-path simulation: `attest()` returns `false` on an invalid
-  proof, and `get_attestation` for the same `(user, credit)` key stays `null`
-  — so the contract genuinely enforces the threshold.
+Real screenshots captured from the app live in:
+- `frontend/public/images/step1-data.jpg`
+- `frontend/public/images/step2-proof.jpg`
+- `frontend/public/images/step3-chain.jpg`
+- `frontend/public/images/step4-verify.jpg`
 
 ## If the prover takes time to load
 
