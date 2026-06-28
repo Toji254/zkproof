@@ -25,6 +25,32 @@ The landlord sees only:
 
 They never see the renter’s raw financial data.
 
+## What the new "Qualified Renter" proof proves
+
+The single-condition verifier above is the product's beating heart.
+But real landlords don't rent to people based on one number. The composite
+`qualified_renter` proof (`circuits/src/main.nr: main_composite`) proves
+**three rules in one ZK proof**, with all amounts staying private:
+
+1. **Income stability** — average monthly income over the last 6 months
+   exceeds the threshold.
+2. **No income cliff** — every individual month meets a stability floor
+   (default 70% of threshold). Catches people who got one big paycheck.
+3. **No negative balances** — none of the 30-day daily balance sample is
+   negative. Catches people whose bank account is currently in overdraft.
+
+The browser page at [`/qualified`](https://zkproof.vercel.app/qualified) lets
+you enter the private witness locally, computes the exact Poseidon
+commitment the circuit checks, and shows the public-input payload that the
+on-chain verifier would receive — same shape, same commitment, no chain tx
+required to inspect.
+
+The market view at [`/market`](https://zkproof.vercel.app/market) is the
+product screen judges remember: a landlord posts a unit, sees every renter
+who has already proven qualification for that threshold, and inspects the
+underlying attestation on Stellar Expert — without ever seeing the
+renter's actual numbers.
+
 ## Why this matters
 
 Rental qualification is still built around oversharing.
@@ -32,7 +58,7 @@ To prove you can afford a home, you are usually asked to reveal bank statements,
 
 ProofPass changes that tradeoff:
 - the renter keeps sensitive financial data local
-- the Noir circuit proves only the threshold claim
+- the Noir circuit proves only the threshold claim (or all three claims, in the composite mode)
 - the Soroban contract verifies the proof on-chain
 - the landlord receives a reusable attestation, not the renter’s underlying data
 
