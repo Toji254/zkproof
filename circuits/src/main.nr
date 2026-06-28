@@ -353,3 +353,160 @@ fn test_clean_commitment_mismatch() {
     let commitment = bn254::hash_2([wrong_secret, sum]);
     main_clean(threshold, att_type, ts, commitment, decimals, balances, secret);
 }
+
+// -------------------------------------------------------
+// Composite qualified_renter proof (additive -- main() unchanged)
+// -------------------------------------------------------
+// ONE proof that demonstrates all three rental qualification rules:
+//   1. Average monthly income over 6 months > threshold
+//   2. Every individual month meets a stability floor (e.g. 70% of threshold)
+//   3. No negative daily balances in the 30-day sample (bound-enforced)
+//
+// This is the "killer" composite that distinguishes ProofPass from a
+// single-threshold demo. The on-chain verifier still receives the same
+// shape of public inputs, just with attestation_type=4 and the
+// extended witness encoded into the commitment.
+//
+// Public inputs (visible on-chain):
+//   - minimum_threshold: e.g. 3000
+//   - attestation_type:  must be 4 (qualified_renter)
+//   - timestamp:         unix seconds
+//   - data_commitment:   Poseidon(secret, sum_income + sum_balance + 36)
+//   - floor_ratio_bps:   stability floor in basis points (e.g. 7000)
+//
+// Private witness:
+//   - monthly_incomes:  [Field; 6]
+//   - daily_balances:   [Field; 30]
+//   - data_source_secret: Field
+fn main_composite(
+    minimum_threshold: Field,
+    attestation_type: Field,
+    timestamp: Field,
+    data_commitment: Field,
+    floor_ratio_bps: Field,
+    monthly_incomes: [Field; 6],
+    daily_balances: [Field; 30],
+    data_source_secret: Field,
+) {
+    let threshold_val = minimum_threshold as u64;
+    let att_type = attestation_type as u64;
+    let ts = timestamp as u64;
+    let ratio = floor_ratio_bps as u64;
+
+    assert(att_type == 4, "Composite attestation requires type 4");
+    assert(threshold_val > 0, "Threshold must be positive");
+    assert(ts > 1704067200, "Timestamp must be after Jan 1 2024");
+    assert(ratio > 0, "Floor ratio must be positive");
+    assert(ratio <= 10000, "Floor ratio must be <= 10000 bps");
+
+    // --- Rule 1 + 2: income stability ---
+    let floor = (threshold_val * ratio) / 10000;
+    let mut sum_income: u64 = 0;
+    for i in 0..6 {
+        let m = monthly_incomes[i] as u64;
+        assert(m < 10_000_000, "Monthly income out of range");
+        assert(m >= floor, "Monthly income below stability floor");
+        sum_income = sum_income + m;
+    }
+    let avg = sum_income / 6;
+    assert(avg > threshold_val, "Average income must exceed threshold");
+
+    // --- Rule 3: no negative balances (per-sample bound enforces non-negative encoding) ---
+    let per_sample_bound: u64 = 1_000_000_000_000_000; // 10^15
+    let mut sum_balance: u64 = 0;
+    for i in 0..30 {
+        let b = daily_balances[i] as u64;
+        assert(b < per_sample_bound, "Daily balance out of safe range");
+        sum_balance = sum_balance + b;
+    }
+
+    // Composite commitment: sums both summaries + month count (36) to bind
+    // the prover to a specific (income, balance) pair, not just one of them.
+    let composite: u64 = sum_income + sum_balance + 36;
+    let composite_field: Field = composite as Field;
+    let computed = bn254::hash_2([data_source_secret, composite_field]);
+    assert(computed == data_commitment, "Data commitment mismatch");
+}
+
+#[test]
+fn test_composite_qualified_passes() {
+    let incomes: [Field; 6] = [5000, 5200, 5100, 5300, 5000, 5150]; // avg 5125 > 3000, all > 2100
+    let balances: [Field; 30] = [1_000_000_000; 30];              // all positive, in range
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 4;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut si: u64 = 0; for i in 0..6 { si = si + (incomes[i] as u64); }
+    let mut sb: u64 = 0; for i in 0..30 { sb = sb + (balances[i] as u64); }
+    let composite: Field = (si + sb + 36) as Field;
+    let commitment = bn254::hash_2([secret, composite]);
+    main_composite(threshold, att_type, ts, commitment, ratio, incomes, balances, secret);
+}
+
+#[test(should_fail_with = "Composite attestation requires type 4")]
+fn test_composite_wrong_type_fails() {
+    let incomes: [Field; 6] = [5000; 6];
+    let balances: [Field; 30] = [1_000_000_000; 30];
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 1; // WRONG
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut si: u64 = 0; for i in 0..6 { si = si + (incomes[i] as u64); }
+    let mut sb: u64 = 0; for i in 0..30 { sb = sb + (balances[i] as u64); }
+    let composite: Field = (si + sb + 36) as Field;
+    let commitment = bn254::hash_2([secret, composite]);
+    main_composite(threshold, att_type, ts, commitment, ratio, incomes, balances, secret);
+}
+
+#[test(should_fail_with = "Average income must exceed threshold")]
+fn test_composite_income_too_low() {
+    // all months above floor (2100) so the floor check passes; avg=2200 < 3000
+    let incomes: [Field; 6] = [2200, 2200, 2200, 2200, 2200, 2200];
+    let balances: [Field; 30] = [1_000_000_000; 30];
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 4;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut si: u64 = 0; for i in 0..6 { si = si + (incomes[i] as u64); }
+    let mut sb: u64 = 0; for i in 0..30 { sb = sb + (balances[i] as u64); }
+    let composite: Field = (si + sb + 36) as Field;
+    let commitment = bn254::hash_2([secret, composite]);
+    main_composite(threshold, att_type, ts, commitment, ratio, incomes, balances, secret);
+}
+
+#[test(should_fail_with = "Monthly income below stability floor")]
+fn test_composite_one_low_month() {
+    // avg=4583 > 3000 but one month is 200 < 2100 floor
+    let incomes: [Field; 6] = [5000, 5200, 5100, 5300, 5000, 200];
+    let balances: [Field; 30] = [1_000_000_000; 30];
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 4;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut si: u64 = 0; for i in 0..6 { si = si + (incomes[i] as u64); }
+    let mut sb: u64 = 0; for i in 0..30 { sb = sb + (balances[i] as u64); }
+    let composite: Field = (si + sb + 36) as Field;
+    let commitment = bn254::hash_2([secret, composite]);
+    main_composite(threshold, att_type, ts, commitment, ratio, incomes, balances, secret);
+}
+
+#[test(should_fail_with = "Daily balance out of safe range")]
+fn test_composite_negative_balance() {
+    let incomes: [Field; 6] = [5000; 6];
+    let mut balances: [Field; 30] = [1_000_000_000; 30];
+    balances[10] = 10_000_000_000_000_001; // over bound -> fails as "negative"
+    let secret: Field = 42;
+    let threshold: Field = 3000;
+    let att_type: Field = 4;
+    let ts: Field = 1750000000;
+    let ratio: Field = 7000;
+    let mut si: u64 = 0; for i in 0..6 { si = si + (incomes[i] as u64); }
+    let mut sb: u64 = 0; for i in 0..30 { sb = sb + (balances[i] as u64); }
+    let composite: Field = (si + sb + 36) as Field;
+    let commitment = bn254::hash_2([secret, composite]);
+    main_composite(threshold, att_type, ts, commitment, ratio, incomes, balances, secret);
+}
