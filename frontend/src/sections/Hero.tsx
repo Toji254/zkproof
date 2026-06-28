@@ -227,6 +227,33 @@ export default function Hero({
             {heroConfig.leadText}
           </p>
 
+          {/* Start here banner — leads new visitors to the role-select screen */}
+          <div
+            id="start-here-banner"
+            onClick={() => {
+              window.location.href = '/start';
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 16px',
+              marginBottom: '28px',
+              border: '1px solid rgba(0, 212, 170, 0.4)',
+              borderRadius: '4px',
+              background: 'rgba(0, 212, 170, 0.06)',
+              fontSize: '12px',
+              color: '#00d4aa',
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+              cursor: 'pointer',
+              textDecoration: 'none',
+            }}
+          >
+            <span>NEW HERE? PICK YOUR ROLE FIRST</span>
+            <span style={{ fontSize: '14px' }}>→</span>
+          </div>
+
           {/* Interactive CTAs */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '48px' }}>
             <Link

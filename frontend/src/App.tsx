@@ -10,9 +10,11 @@ import Footer from './sections/Footer';
 import FacilityDetail from './pages/FacilityDetail';
 import OpsTools from './pages/OpsTools';
 import ProveAttest from './pages/ProveAttest';
+import RoleSelect from './pages/RoleSelect';
 import WalletPicker from './components/WalletPicker';
 import DemoTour from './components/DemoTour';
 import { setConnectedAddress as setStellarAddress, disconnectWallet } from './lib/stellar';
+import { getQaConfig } from './lib/qa';
 
 export interface ZkState {
   income: string;
@@ -85,11 +87,15 @@ function Home({
 }
 
 function App() {
-  const [walletAddress, setWalletAddress] = useState<string>('');
+  const qa = getQaConfig();
+  const [walletAddress, setWalletAddress] = useState<string>(qa?.walletAddress ?? '');
   const [pickerOpen, setPickerOpen] = useState<boolean>(false);
 
   // Shared ZK workflow state — passed into FacilityDetail for the four steps.
-  const [zkState, setZkState] = useState<ZkState>(initialZkState);
+  const [zkState, setZkState] = useState<ZkState>(() => ({
+    ...initialZkState,
+    ...qa?.zkState,
+  }));
 
   useEffect(() => {
     document.title = siteConfig.siteTitle || 'zkProof — ZK Financial Attestation';
@@ -124,6 +130,7 @@ function App() {
   return (
     <>
       <Routes>
+        <Route path="/start" element={<RoleSelect />} />
         <Route
           path="/"
           element={

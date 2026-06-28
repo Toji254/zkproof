@@ -2,7 +2,9 @@
 
 ## Open this first
 
-1. Open the live demo at the Vercel URL in the README (or run locally: `cd frontend && npm run dev`).
+1. Open `/start` on the live demo — you'll see two cards (Renter vs Landlord). Pick the one you want to inspect.
+   - **Renter** → `/prove` (you'll be asked to connect a Stellar testnet wallet)
+   - **Landlord** → `/facility/verify` (no wallet needed, just paste a Stellar address)
 2. Keep the renter and landlord story in mind:
    - renter wants to qualify privately
    - landlord wants a yes/no answer
