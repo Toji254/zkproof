@@ -268,19 +268,22 @@ See [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md) for the deployment 
 
 ## Screenshots
 
-Real screenshots from the running app, captured against the deployed frontend:
+Actual UI screenshots captured from the running app:
 
-**Step 1 — Renter enters private data locally**
-![Step 1: renter enters private income and picks a threshold](frontend/public/images/step1-data.jpg)
+**Role selection — renter vs landlord flow**
+![ProofPass role selection screen showing separate renter and landlord entry points](docs/readme-screenshots/start.png)
 
-**Step 2 — Proof generates in the browser**
-![Step 2: ZK proof is generated locally, raw salary never leaves the browser](frontend/public/images/step2-proof.jpg)
+**Renter proof flow — private value stays in the browser**
+![ProofPass renter qualification page showing the private input form and public threshold options](docs/readme-screenshots/prove.png)
 
-**Step 3 — Attestation recorded on Stellar**
-![Step 3: qualification attestation is live on Stellar testnet with tx hash](frontend/public/images/step3-chain.jpg)
+**Qualified Renter — composite proof view**
+![ProofPass qualified renter page showing composite proof checks, public inputs, and qualification status](docs/readme-screenshots/qualified.png)
 
-**Step 4 — Landlord verifies on-chain**
-![Step 4: landlord portal shows qualified / threshold / expiry without seeing raw data](frontend/public/images/step4-verify.jpg)
+**Landlord market — post units and review qualified renters**
+![ProofPass landlord market page showing unit posting fields and the qualified renters ledger panel](docs/readme-screenshots/market.png)
+
+**Landlord verification portal — yes/no check without raw financial data**
+![ProofPass landlord verification portal for checking a renter's qualification without viewing private finances](frontend/public/images/landlord-verify.jpg)
 
 ## On-chain proof of execution
 
