@@ -44,7 +44,6 @@ export default function RoleSelect() {
         color: '#e8ecf1',
       }}
     >
-      {/* Eyebrow */}
       <div
         style={{
           fontSize: '11px',
@@ -57,7 +56,6 @@ export default function RoleSelect() {
         ProofPass · Stellar Hacks
       </div>
 
-      {/* Headline */}
       <h1
         style={{
           fontSize: 'clamp(28px, 4.5vw, 52px)',
@@ -86,7 +84,6 @@ export default function RoleSelect() {
         switch any time from inside either flow.
       </p>
 
-      {/* Role cards */}
       <div
         style={{
           display: 'grid',
@@ -97,7 +94,6 @@ export default function RoleSelect() {
           justifyContent: 'center',
         }}
       >
-        {/* RENTER CARD */}
         <Link
           to="/prove"
           onClick={() => handleRoleContinue('renter')}
@@ -130,7 +126,6 @@ export default function RoleSelect() {
             e.currentTarget.style.boxShadow = 'none';
           }}
         >
-          {/* Icon */}
           <div
             aria-hidden="true"
             style={{
@@ -214,7 +209,6 @@ export default function RoleSelect() {
           </div>
         </Link>
 
-        {/* LANDLORD CARD */}
         <Link
           to="/facility/verify"
           onClick={() => handleRoleContinue('landlord')}
@@ -247,7 +241,6 @@ export default function RoleSelect() {
             e.currentTarget.style.boxShadow = 'none';
           }}
         >
-          {/* Icon */}
           <div
             aria-hidden="true"
             style={{
@@ -333,7 +326,6 @@ export default function RoleSelect() {
         </Link>
       </div>
 
-      {/* Footer note */}
       <div
         style={{
           marginTop: '64px',
@@ -354,7 +346,6 @@ export default function RoleSelect() {
         </Link>
       </div>
 
-      {/* Document title for accessibility / tab title */}
       <title>{siteConfig.siteTitle} — Choose your role</title>
     </section>
   );

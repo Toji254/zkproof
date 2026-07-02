@@ -43,16 +43,26 @@ function sleep(ms: number): Promise<void> {
 }
 
 function formatSendTransactionError(sendResponse: Any): string {
+  const txCode = getSendTransactionResultCode(sendResponse);
   const details: string[] = [];
 
   if (sendResponse?.status) {
     details.push(`status=${sendResponse.status}`);
   }
 
+  if (txCode) {
+    details.push(`txCode=${txCode}`);
+  }
+
   try {
     const result = sendResponse?.errorResult?.result?.();
     if (result) {
-      details.push(`result=${String(result)}`);
+      const switchName = typeof result?.switch === "function" ? result.switch()?.name : null;
+      if (switchName && switchName !== txCode) {
+        details.push(`result=${switchName}`);
+      } else if (!switchName) {
+        details.push(`result=${String(result)}`);
+      }
     }
   } catch {
     // Avoid masking the real send failure with XDR serialization issues.
@@ -63,6 +73,20 @@ function formatSendTransactionError(sendResponse: Any): string {
   }
 
   return details.join(", ") || "unknown send failure";
+}
+
+function getSendTransactionResultCode(sendResponse: Any): string | null {
+  try {
+    const result = sendResponse?.errorResult?.result?.();
+    const code = typeof result?.switch === "function" ? result.switch() : null;
+    return typeof code?.name === "string" ? code.name : null;
+  } catch {
+    return null;
+  }
+}
+
+function isRetryableSendTransactionError(sendResponse: Any): boolean {
+  return getSendTransactionResultCode(sendResponse) === "txBadSeq";
 }
 
 async function rpcRequest<T>(method: string, params: Record<string, unknown>): Promise<T> {
@@ -355,6 +379,7 @@ export async function submitAttestation(
   }
 
   const server: Any = makeServer();
+  const maxSendAttempts = 2;
 
   // 1. Build the 4 × 32-byte public inputs bytes (circuit-scaled values).
   const thresholdValue = BigInt(String(publicInputs[0] ?? threshold));
@@ -388,7 +413,6 @@ export async function submitAttestation(
 
   // 3. Build the transaction.
   const contract = new Contract(CONTRACT_ID);
-  const sourceAccount = await server.getAccount(connectedAddress);
 
   // The contract cross-checks the i128 `threshold` arg against the first public
   // input. For balance proofs that value is already scaled to chain precision
@@ -397,106 +421,120 @@ export async function submitAttestation(
   // input value to keep the contract arguments and proof inputs aligned.
   const contractThreshold = thresholdValue;
 
-  const tx: Any = new TransactionBuilder(sourceAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call(
-        "attest",
-        nativeToScVal(connectedAddress, { type: "address" }),
-        nativeToScVal(pubInputs, { type: "bytes" }),
-        nativeToScVal(proofBytes, { type: "bytes" }),
-        nativeToScVal(attestationType, { type: "symbol" }),
-        nativeToScVal(contractThreshold, { type: "i128" }),
-      ),
-    )
-    .setTimeout(30)
-    .build();
+  for (let attempt = 1; attempt <= maxSendAttempts; attempt += 1) {
+    const sourceAccount = await server.getAccount(connectedAddress);
+    const tx: Any = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "attest",
+          nativeToScVal(connectedAddress, { type: "address" }),
+          nativeToScVal(pubInputs, { type: "bytes" }),
+          nativeToScVal(proofBytes, { type: "bytes" }),
+          nativeToScVal(attestationType, { type: "symbol" }),
+          nativeToScVal(contractThreshold, { type: "i128" }),
+        ),
+      )
+      .setTimeout(30)
+      .build();
 
-  const simulation: Any = await server.simulateTransaction(tx);
-  if (simulation.error) {
-    throw new Error(
-      `On-chain simulation failed: ${simulation.error}. ` +
-        `If this mentions verification or the VK, re-upload the keccak verification key with ./scripts/update-vk.sh.`,
-    );
-  }
-
-  const simulatedResult = getSimulationReturnValue(simulation);
-  if (simulatedResult === false) {
-    throw new Error(formatRejectedAttestationHint());
-  }
-
-  // 4. Simulate before asking the user to sign.
-  // We wrap this in a try/catch that pulls out a plain string error message.
-  // The stellar-sdk sometimes throws a "Bad union switch: N" TypeError when it
-  // fails to decode the XDR of a Soroban panic/error response, which masks the
-  // real contract error. We guard against that here.
-  let prepared: Any;
-  try {
-    prepared = await server.prepareTransaction(tx);
-  } catch (err: Any) {
-    console.error("Simulation failed:", err);
-    // Pull a human-readable message from various error shapes the SDK may throw.
-    let msg: string = err?.message ?? String(err);
-    // If the SDK itself crashed parsing the error ("Bad union switch"),
-    // try to surface the raw simulation error string instead.
-    if (msg.includes('union switch') || msg.includes('Bad union')) {
-      msg = 'Contract execution failed during simulation. ' +
-        'Possible causes: VK mismatch (run ./scripts/update-vk.sh), ' +
-        'invalid proof length, or circuit constraint violation.';
+    const simulation: Any = await server.simulateTransaction(tx);
+    if (simulation.error) {
+      throw new Error(
+        `On-chain simulation failed: ${simulation.error}. ` +
+          `If this mentions verification or the VK, re-upload the keccak verification key with ./scripts/update-vk.sh.`,
+      );
     }
-    throw new Error(
-      `On-chain simulation failed: ${msg}. ` +
-        `If this says "verification failed" or "VK", the verification key ` +
-        `on-chain does not match the circuit — run ./scripts/update-vk.sh.`,
+
+    const simulatedResult = getSimulationReturnValue(simulation);
+    if (simulatedResult === false) {
+      throw new Error(formatRejectedAttestationHint());
+    }
+
+    // 4. Simulate before asking the user to sign.
+    // We wrap this in a try/catch that pulls out a plain string error message.
+    // The stellar-sdk sometimes throws a "Bad union switch: N" TypeError when it
+    // fails to decode the XDR of a Soroban panic/error response, which masks the
+    // real contract error. We guard against that here.
+    let prepared: Any;
+    try {
+      prepared = await server.prepareTransaction(tx);
+    } catch (err: Any) {
+      console.error("Simulation failed:", err);
+      // Pull a human-readable message from various error shapes the SDK may throw.
+      let msg: string = err?.message ?? String(err);
+      // If the SDK itself crashed parsing the error ("Bad union switch"),
+      // try to surface the raw simulation error string instead.
+      if (msg.includes('union switch') || msg.includes('Bad union')) {
+        msg = 'Contract execution failed during simulation. ' +
+          'Possible causes: VK mismatch (run ./scripts/update-vk.sh), ' +
+          'invalid proof length, or circuit constraint violation.';
+      }
+      throw new Error(
+        `On-chain simulation failed: ${msg}. ` +
+          `If this says "verification failed" or "VK", the verification key ` +
+          `on-chain does not match the circuit — run ./scripts/update-vk.sh.`,
+      );
+    }
+
+    // 5. Sign via the connected wallet.
+    const xdrToSign = prepared.toXDR();
+    const signedTxXdr = await signWithKit(
+      xdrToSign,
+      connectedAddress,
+      NETWORK_PASSPHRASE,
     );
+
+    // 6. Submit + poll.
+    let signedTx: Any;
+    try {
+      signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
+    } catch (err: Any) {
+      throw new Error(
+        `Failed to parse signed transaction XDR: ${err?.message ?? String(err)}. ` +
+          `This usually means the wallet returned an unexpected object shape.`,
+      );
+    }
+
+    const sendResponse = await server.sendTransaction(signedTx);
+    if (sendResponse.status === "ERROR") {
+      if (attempt < maxSendAttempts && isRetryableSendTransactionError(sendResponse)) {
+        console.warn(
+          `Retrying attestation after sendTransaction error (${formatSendTransactionError(sendResponse)}).`,
+        );
+        continue;
+      }
+
+      throw new Error(`Transaction submission error: ${formatSendTransactionError(sendResponse)}`);
+    }
+
+    onSubmitted?.(sendResponse.hash);
+    const final = await waitForTransaction(server, sendResponse.hash);
+    if (final.status !== "SUCCESS") {
+      throw new Error(
+        `Transaction failed on-chain: ${formatRawTransactionFailure(final)}`,
+      );
+    }
+
+    const finalResult = getTransactionReturnValue(final);
+    if (finalResult === false) {
+      throw new Error(`${formatRejectedAttestationHint()} Transaction hash: ${sendResponse.hash}`);
+    }
+
+    const valid = await waitForRecordedAttestation(connectedAddress, attestationType);
+    if (!valid) {
+      throw new Error(
+        "Transaction confirmed, but the attestation was still not visible after several read retries. " +
+          `Check the tx on Stellar Expert and verify the contract state directly. Tx hash: ${sendResponse.hash}`,
+      );
+    }
+
+    return sendResponse.hash;
   }
 
-  // 5. Sign via the connected wallet.
-  const xdrToSign = prepared.toXDR();
-  const signedTxXdr = await signWithKit(
-    xdrToSign,
-    connectedAddress,
-    NETWORK_PASSPHRASE,
-  );
-
-  // 6. Submit + poll.
-  let signedTx: Any;
-  try {
-    signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
-  } catch (err: Any) {
-    throw new Error(
-      `Failed to parse signed transaction XDR: ${err?.message ?? String(err)}. ` +
-        `This usually means the wallet returned an unexpected object shape.`,
-    );
-  }
-  const sendResponse = await server.sendTransaction(signedTx);
-  if (sendResponse.status === "ERROR") {
-    throw new Error(`Transaction submission error: ${formatSendTransactionError(sendResponse)}`);
-  }
-  onSubmitted?.(sendResponse.hash);
-  const final = await waitForTransaction(server, sendResponse.hash);
-  if (final.status !== "SUCCESS") {
-    throw new Error(
-      `Transaction failed on-chain: ${formatRawTransactionFailure(final)}`,
-    );
-  }
-
-  const finalResult = getTransactionReturnValue(final);
-  if (finalResult === false) {
-    throw new Error(`${formatRejectedAttestationHint()} Transaction hash: ${sendResponse.hash}`);
-  }
-
-  const valid = await waitForRecordedAttestation(connectedAddress, attestationType);
-  if (!valid) {
-    throw new Error(
-      "Transaction confirmed, but the attestation was still not visible after several read retries. " +
-        `Check the tx on Stellar Expert and verify the contract state directly. Tx hash: ${sendResponse.hash}`,
-    );
-  }
-
-  return sendResponse.hash;
+  throw new Error("Transaction submission failed after retrying with a fresh account sequence.");
 }
 
 /** Read-only: does the given address have a non-expired attestation of this type? */

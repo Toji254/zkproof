@@ -13,7 +13,13 @@ import { computeCommitment, generateProof } from '../lib/prover';
 import { formatChainThresholdForDisplay, normalizeAttestationInput } from '../lib/attestationMath';
 import { CONTRACT_ID } from '../lib/config';
 import { getStellarExpertContractUrl, getStellarExpertTxUrl, getExplorerNetworkSlug } from '../lib/explorer';
-import { ensureProfile, getLedgerRecords, saveLedgerRecord, type LandlordLedgerRecord } from '../lib/profile';
+import {
+  ensureProfile,
+  getLedgerRecords,
+  LEDGER_CHANGED_EVENT,
+  saveLedgerRecord,
+  type LandlordLedgerRecord,
+} from '../lib/profile';
 import { LEDGER_EXPORT_THEMES, exportLedgerRecordPdf, exportLedgerRecordPng, type LedgerExportThemeId } from '../lib/ledgerExport';
 import type { ZkState } from '../App';
 
@@ -54,10 +60,9 @@ export default function FacilityDetail({
   const { slug } = useParams<{ slug: string }>();
   const landlordProfile = useMemo(() => ensureProfile('landlord'), []);
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const sharedVerifyAddress = query.get('address') ?? '';
   const sharedVerifyType = (query.get('type') as 'income' | 'balance' | 'credit' | null) ?? null;
-  const sharedRenterPublicId = query.get('publicId') ?? '';
   const sharedLandlordPublicId = query.get('landlordId') ?? '';
+  const activeLandlordPublicId = sharedLandlordPublicId || landlordProfile.publicId;
   const sharedTxHash = query.get('tx') ?? '';
 
   // Form Inputs
@@ -68,8 +73,7 @@ export default function FacilityDetail({
     selectedAssetId: facilityQa?.formData?.selectedAssetId ?? zkState.selectedAssetId,
     attestationType: facilityQa?.formData?.attestationType ?? zkState.attestationType,
     threshold: facilityQa?.formData?.threshold ?? zkState.threshold,
-    verifyAddress:
-      facilityQa?.formData?.verifyAddress ?? sharedVerifyAddress ?? walletAddress ?? '',
+    verifyAddress: facilityQa?.formData?.verifyAddress ?? '',
     verifyType: facilityQa?.formData?.verifyType ?? sharedVerifyType ?? zkState.attestationType,
   });
 
@@ -98,6 +102,26 @@ export default function FacilityDetail({
     }
   }, [facilityQa?.verificationResult]);
 
+  useEffect(() => {
+    const refreshSavedLedgerRecords = () => {
+      setSavedLedgerRecords(
+        getLedgerRecords().filter((record) => record.landlordPublicId === activeLandlordPublicId),
+      );
+    };
+
+    refreshSavedLedgerRecords();
+
+    window.addEventListener('focus', refreshSavedLedgerRecords);
+    window.addEventListener('storage', refreshSavedLedgerRecords);
+    window.addEventListener(LEDGER_CHANGED_EVENT, refreshSavedLedgerRecords);
+
+    return () => {
+      window.removeEventListener('focus', refreshSavedLedgerRecords);
+      window.removeEventListener('storage', refreshSavedLedgerRecords);
+      window.removeEventListener(LEDGER_CHANGED_EVENT, refreshSavedLedgerRecords);
+    };
+  }, [activeLandlordPublicId]);
+
   const facility = useMemo(
     () => facilitiesConfig.items.find((item) => item.slug === slug) ?? null,
     [slug]
@@ -110,13 +134,6 @@ export default function FacilityDetail({
       null,
     [walletAssets, formData.selectedAssetId]
   );
-
-  // Sync state if wallet connects/disconnects
-  useEffect(() => {
-    if (walletAddress && !formData.verifyAddress) {
-      setFormData(prev => ({ ...prev, verifyAddress: walletAddress }));
-    }
-  }, [walletAddress, formData.verifyAddress]);
 
   useEffect(() => {
     if (suppressNetwork) return;
@@ -270,24 +287,50 @@ export default function FacilityDetail({
     ].some((value) => value.toLowerCase().includes(queryText));
   });
 
+  const persistVerifiedAttestation = (record: {
+    address: string;
+    type: string;
+    threshold: string;
+    issuedAt: string;
+    expiresAt: string;
+    proofHash: string;
+    txHash?: string;
+    renterPublicId?: string;
+  }) => {
+    const saved = saveLedgerRecord({
+      landlordPublicId: activeLandlordPublicId,
+      renterPublicId: record.renterPublicId ?? 'UNKNOWN',
+      renterWalletAddress: record.address,
+      attestationType: record.type,
+      threshold: record.threshold,
+      issuedAt: record.issuedAt,
+      expiresAt: record.expiresAt,
+      proofHash: record.proofHash,
+      txHash: record.txHash || undefined,
+      contractId: CONTRACT_ID || undefined,
+      network: getExplorerNetworkSlug(),
+    });
+
+    setSavedLedgerRecords(
+      getLedgerRecords().filter((entry) => entry.landlordPublicId === activeLandlordPublicId),
+    );
+
+    return saved;
+  };
+
   const handleSaveLedgerRecord = () => {
     if (!verificationResult || !verificationResult.valid) return;
 
-    const saved = saveLedgerRecord({
-      landlordPublicId: landlordProfile.publicId,
-      renterPublicId: verificationResult.renterPublicId ?? sharedRenterPublicId ?? 'UNKNOWN',
-      renterWalletAddress: verificationResult.address,
-      attestationType: verificationResult.type,
+    const saved = persistVerifiedAttestation({
+      address: verificationResult.address,
+      type: verificationResult.type,
       threshold: verificationResult.threshold,
       issuedAt: verificationResult.issuedAt,
       expiresAt: verificationResult.expiresAt,
       proofHash: verificationResult.proofHash,
       txHash: verificationTxHash || undefined,
-      contractId: CONTRACT_ID || undefined,
-      network: getExplorerNetworkSlug(),
+      renterPublicId: verificationResult.renterPublicId,
     });
-
-    setSavedLedgerRecords(getLedgerRecords());
     setLedgerSavedMessage(`Saved ${saved.renterPublicId} to landlord ledger.`);
     window.setTimeout(() => setLedgerSavedMessage(''), 2400);
   };
@@ -299,7 +342,7 @@ export default function FacilityDetail({
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `proofpass-landlord-ledger-${landlordProfile.publicId}.json`;
+    anchor.download = `proofpass-landlord-ledger-${activeLandlordPublicId}.json`;
     anchor.click();
     window.URL.revokeObjectURL(url);
     setLedgerExported(true);
@@ -577,9 +620,7 @@ export default function FacilityDetail({
 
       setProgress(100);
       if (valid && attestation) {
-        addLog(`✅ Contract returned: valid attestation found.`);
-        setVerificationResult({
-          valid: true,
+        const verifiedRecord = {
           address: normalizedVerifyAddress,
           type: attestation.attestationType,
           threshold: formatChainThresholdForDisplay(attestation.attestationType, attestation.threshold),
@@ -587,8 +628,12 @@ export default function FacilityDetail({
           expiresAt: new Date(attestation.expiresAt * 1000).toLocaleString(),
           proofHash: attestation.proofHash,
           txHash: sharedTxHash || zkState.txHash || undefined,
-          renterPublicId: sharedRenterPublicId || undefined,
-        });
+          renterPublicId: undefined,
+        };
+        const saved = persistVerifiedAttestation(verifiedRecord);
+        addLog(`✅ Contract returned: valid attestation found.`);
+        addLog(`Saved ${saved.renterPublicId} to landlord ledger.`);
+        setVerificationResult({ valid: true, ...verifiedRecord, renterPublicId: saved.renterPublicId });
       } else {
         addLog('Contract returned: no valid attestation found.');
         setVerificationResult({ valid: false });
@@ -1161,16 +1206,6 @@ export default function FacilityDetail({
                       </div>
                     </div>
                   )}
-                  {sharedRenterPublicId && (
-                    <div style={{ padding: '12px', background: 'rgba(0, 212, 170, 0.05)', border: '1px solid rgba(0,212,170,0.16)' }}>
-                      <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '4px' }}>
-                        Shared renter public ID
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#00d4aa', fontWeight: 700, letterSpacing: '0.08em' }}>
-                        {sharedRenterPublicId}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
@@ -1200,6 +1235,7 @@ export default function FacilityDetail({
                     Requirement type
                   </label>
                   <select
+                    id="verify-type-select"
                     value={formData.verifyType}
                     onChange={(e) => setFormData(prev => ({ ...prev, verifyType: e.target.value as any }))}
                     style={{
@@ -1232,7 +1268,7 @@ export default function FacilityDetail({
                 {verificationResult && (
                   <div style={{ marginTop: '24px' }}>
                     {verificationResult.valid ? (
-                      <div style={{ padding: '18px', background: 'rgba(0, 212, 170, 0.08)', border: '1px solid #00d4aa' }}>
+                      <div id="verify-qualified-result" style={{ padding: '18px', background: 'rgba(0, 212, 170, 0.08)', border: '1px solid #00d4aa' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00d4aa' }} />
                           <span style={{ fontSize: '11px', color: '#00d4aa', fontWeight: 600, textTransform: 'uppercase' }}>
@@ -1300,7 +1336,7 @@ export default function FacilityDetail({
                               fontFamily: "'IBM Plex Mono', monospace",
                             }}
                           >
-                            Save renter attestation to landlord ledger
+                            Save again to landlord ledger
                           </button>
                           {ledgerSavedMessage && (
                             <div style={{ fontSize: '10px', color: '#00d4aa', textAlign: 'center' }}>{ledgerSavedMessage}</div>
@@ -1321,7 +1357,7 @@ export default function FacilityDetail({
                         </div>
                       </div>
                     ) : (
-                      <div style={{ padding: '18px', background: 'rgba(255, 68, 102, 0.08)', border: '1px solid #ff4466' }}>
+                      <div id="verify-not-qualified-result" style={{ padding: '18px', background: 'rgba(255, 68, 102, 0.08)', border: '1px solid #ff4466' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4466' }} />
                           <span style={{ fontSize: '11px', color: '#ff4466', fontWeight: 600, textTransform: 'uppercase' }}>

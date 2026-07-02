@@ -258,6 +258,7 @@ export default function Hero({
           <div style={{ display: 'flex', gap: '16px', marginBottom: '48px' }}>
             <Link
               to="/prove"
+              id="prove-qualification-btn"
               className="btn-zk btn-zk-primary"
               style={{ fontSize: '11px', padding: '12px 24px' }}
             >

@@ -23,6 +23,7 @@ export interface MarketListing {
 
 const STORAGE_KEY = 'proofpass_market_listings_v1';
 const MAX_LISTINGS = 50;
+export const MARKET_LISTINGS_CHANGED_EVENT = 'proofpass:market-listings-changed';
 
 function hasStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -41,6 +42,7 @@ function readAll(): MarketListing[] {
 function writeAll(listings: MarketListing[]): void {
   if (!hasStorage()) return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(listings.slice(0, MAX_LISTINGS)));
+  window.dispatchEvent(new CustomEvent(MARKET_LISTINGS_CHANGED_EVENT));
 }
 
 export function listListings(): MarketListing[] {
@@ -61,4 +63,13 @@ export function saveListing(listing: Omit<MarketListing, 'id' | 'createdAt'>): M
 
 export function removeListing(id: string): void {
   writeAll(readAll().filter((l) => l.id !== id));
+}
+
+export function clearListings(landlordPublicId?: string): void {
+  if (!landlordPublicId) {
+    writeAll([]);
+    return;
+  }
+
+  writeAll(readAll().filter((listing) => listing.landlordPublicId !== landlordPublicId));
 }

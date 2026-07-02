@@ -144,10 +144,16 @@ export default function ProveAttest({
   const explorerTxUrl = txHash ? getStellarExpertTxUrl(txHash) : '';
   const explorerAccountUrl = walletAddress ? getStellarExpertAccountUrl(walletAddress) : '';
   const explorerContractUrl = CONTRACT_ID ? getStellarExpertContractUrl(CONTRACT_ID) : '';
-  const landlordIdParam = sharedLandlordPublicId ? `&landlordId=${encodeURIComponent(sharedLandlordPublicId)}` : '';
-  const shareVerifyUrl = walletAddress
-    ? `/facility/verify?address=${encodeURIComponent(walletAddress)}&type=${encodeURIComponent(attType)}&publicId=${encodeURIComponent(renterProfile.publicId)}&tx=${encodeURIComponent(txHash)}${landlordIdParam}`
-    : '/facility/verify';
+  const shareVerifyParams = new URLSearchParams();
+  shareVerifyParams.set('type', attType);
+  if (txHash) {
+    shareVerifyParams.set('tx', txHash);
+  }
+  if (sharedLandlordPublicId) {
+    shareVerifyParams.set('landlordId', sharedLandlordPublicId);
+  }
+  const shareVerifyQuery = shareVerifyParams.toString();
+  const shareVerifyUrl = shareVerifyQuery ? `/facility/verify?${shareVerifyQuery}` : '/facility/verify';
   const shareVerifyAbsoluteUrl = typeof window !== 'undefined'
     ? `${window.location.origin}${shareVerifyUrl}`
     : shareVerifyUrl;
@@ -511,6 +517,7 @@ export default function ProveAttest({
                 <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <span style={{ fontSize: '10px', color: '#556677' }}>Custom:</span>
                   <input
+                    id="threshold-input"
                     type="number"
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
@@ -537,6 +544,7 @@ export default function ProveAttest({
 
               {/* CTA */}
               <button
+                id="prove-record-btn"
                 onClick={handleProveAndAttest}
                 disabled={busy}
                 style={{
@@ -571,7 +579,7 @@ export default function ProveAttest({
               {stage === 'done' ? (
                 <>
                   {/* Success */}
-                  <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                  <div id="attestation-success-card" style={{ textAlign: 'center', marginBottom: '32px' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
                     <div style={{ fontSize: '20px', fontWeight: 400, textTransform: 'uppercase', color: '#00d4aa', marginBottom: '8px' }}>
                       Qualification Recorded
@@ -710,10 +718,13 @@ export default function ProveAttest({
                     </div>
                     <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#050a0f', border: '1px solid rgba(136,153,170,0.08)' }}>
                       <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', marginBottom: '6px' }}>
-                        Prefilled landlord link
+                        Landlord verify link
                       </div>
                       <div style={{ fontSize: '10px', color: '#00d4aa', wordBreak: 'break-all', lineHeight: 1.6 }}>
                         {shareVerifyAbsoluteUrl}
+                      </div>
+                      <div style={{ marginTop: '8px', fontSize: '10px', color: '#556677', lineHeight: 1.6 }}>
+                        This link keeps the proof context, but the landlord must paste your wallet address manually.
                       </div>
                     </div>
                     <div style={{ fontSize: '10px', color: '#556677', wordBreak: 'break-word', lineHeight: 1.6 }}>

@@ -61,10 +61,12 @@ See [`EVIDENCE.md`](./EVIDENCE.md) for:
   — so the contract genuinely enforces the threshold.
 
 Real screenshots captured from the app live in:
-- `frontend/public/images/step1-data.jpg`
-- `frontend/public/images/step2-proof.jpg`
-- `frontend/public/images/step3-chain.jpg`
-- `frontend/public/images/step4-verify.jpg`
+- `docs/readme-screenshots/home.png` (Homepage)
+- `docs/readme-screenshots/start.png` (Role Select)
+- `docs/readme-screenshots/prove.png` (Renter Prove Page)
+- `docs/readme-screenshots/qualified.png` (Qualified Renter Page)
+- `docs/readme-screenshots/market.png` (Landlord Market Page)
+- `docs/readme-screenshots/verify.png` (Landlord Verification Portal)
 
 ## If the prover takes time to load
 

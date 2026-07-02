@@ -241,10 +241,42 @@ export default function QualifiedRenter() {
               margin: 0,
             }}
           >
-            Prove three qualification rules in one zero-knowledge proof: stable
-            income, floor maintenance, and no negative balances. Numbers stay in
-            your browser.
+            This page checks if a renter passes the test. Their private numbers
+            stay on this screen.
           </p>
+          <div
+            style={{
+              marginTop: 22,
+              maxWidth: 780,
+              padding: '18px 20px',
+              borderRadius: 14,
+              border: `1px solid ${BORDER}`,
+              background: 'rgba(255,255,255,0.03)',
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: FONT,
+                fontSize: 10,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: ACCENT,
+              }}
+            >
+              What this page does
+            </div>
+            <div style={{ fontFamily: FONT, fontSize: 12, lineHeight: 1.8, color: TEXT }}>
+              Think of this like a practice check.
+            </div>
+            <div style={{ fontFamily: FONT, fontSize: 12, lineHeight: 1.8, color: TEXT }}>
+              If the box says Qualified, the renter passes. If it says Not qualified, they do not pass yet.
+            </div>
+            <div style={{ fontFamily: FONT, fontSize: 12, lineHeight: 1.8, color: MUTED }}>
+              This page does not send renters to the market by itself. The landlord still has to check and save them.
+            </div>
+          </div>
         </div>
 
         {/* Two-column grid */}
@@ -291,6 +323,7 @@ export default function QualifiedRenter() {
               <label style={labelBase}>
                 Threshold
                 <input
+                  id="qualified-threshold-input"
                   type="number"
                   value={threshold}
                   onChange={(e) => setThreshold(e.target.value)}
@@ -362,6 +395,7 @@ export default function QualifiedRenter() {
                   <label key={i} style={{ ...labelBase, marginBottom: 0 }}>
                     Month {i + 1}
                     <input
+                      id={i === 0 ? 'qualified-month-1-input' : undefined}
                       type="number"
                       value={m}
                       onChange={(e) => {
@@ -508,6 +542,7 @@ export default function QualifiedRenter() {
           >
             {/* Big status */}
             <div
+              id="qualified-status-card"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -607,6 +642,7 @@ export default function QualifiedRenter() {
             </h2>
 
             <div
+              id="qualified-public-inputs"
               style={{
                 background: 'rgba(0,0,0,0.35)',
                 border: `1px solid ${BORDER}`,

@@ -12,8 +12,21 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ensureProfile, getLedgerRecords, type LandlordLedgerRecord } from '../lib/profile';
-import { listListings, saveListing, removeListing, type MarketListing } from '../lib/marketListings';
+import {
+  clearLedgerRecords,
+  ensureProfile,
+  getLedgerRecords,
+  LEDGER_CHANGED_EVENT,
+  type LandlordLedgerRecord,
+} from '../lib/profile';
+import {
+  clearListings,
+  listListings,
+  MARKET_LISTINGS_CHANGED_EVENT,
+  removeListing,
+  saveListing,
+  type MarketListing,
+} from '../lib/marketListings';
 import { getStellarExpertTxUrl } from '../lib/explorer';
 import { CONTRACT_ID } from '../lib/config';
 
@@ -50,10 +63,26 @@ export default function LandlordMarket({ walletAddress }: Props) {
   const [thresholdDisplay, setThresholdDisplay] = useState('');
   const [city, setCity] = useState('');
 
+  const refreshMarketState = () => {
+    setListings(listListings().filter((listing) => listing.landlordPublicId === landlordProfile.publicId));
+    setLedgerRecords(getLedgerRecords().filter((record) => record.landlordPublicId === landlordProfile.publicId));
+  };
+
   useEffect(() => {
-    setListings(listListings());
-    setLedgerRecords(getLedgerRecords());
-  }, []);
+    refreshMarketState();
+
+    window.addEventListener('focus', refreshMarketState);
+    window.addEventListener('storage', refreshMarketState);
+    window.addEventListener(LEDGER_CHANGED_EVENT, refreshMarketState);
+    window.addEventListener(MARKET_LISTINGS_CHANGED_EVENT, refreshMarketState);
+
+    return () => {
+      window.removeEventListener('focus', refreshMarketState);
+      window.removeEventListener('storage', refreshMarketState);
+      window.removeEventListener(LEDGER_CHANGED_EVENT, refreshMarketState);
+      window.removeEventListener(MARKET_LISTINGS_CHANGED_EVENT, refreshMarketState);
+    };
+  }, [landlordProfile.publicId]);
 
   const qualifiedRenters = useMemo(() => {
     return ledgerRecords
@@ -81,6 +110,22 @@ export default function LandlordMarket({ walletAddress }: Props) {
   const onRemove = (id: string) => {
     removeListing(id);
     setListings(listings.filter((l) => l.id !== id));
+  };
+
+  const onClearQualifiedRenters = () => {
+    if (!qualifiedRenters.length) return;
+    const confirmed = window.confirm('Clear all qualified renters saved for this landlord?');
+    if (!confirmed) return;
+    clearLedgerRecords(landlordProfile.publicId);
+    setLedgerRecords([]);
+  };
+
+  const onClearPostedUnits = () => {
+    if (!listings.length) return;
+    const confirmed = window.confirm('Clear all posted units for this landlord?');
+    if (!confirmed) return;
+    clearListings(landlordProfile.publicId);
+    setListings([]);
   };
 
   const inputBase: React.CSSProperties = {
@@ -190,6 +235,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
         >
           {/* LEFT: post unit + your listings */}
           <div
+            id="market-post-card"
             style={{
               background: BG_CARD,
               backdropFilter: 'blur(20px)',
@@ -212,10 +258,11 @@ export default function LandlordMarket({ walletAddress }: Props) {
               Post a unit
             </h2>
 
-            <form onSubmit={onPost}>
+            <form id="market-post-form" onSubmit={onPost}>
               <label style={labelBase}>
                 Unit name
                 <input
+                  id="market-unit-name-input"
                   type="text"
                   placeholder="2BR apartment, Westlands"
                   value={unitName}
@@ -227,6 +274,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
               <label style={labelBase}>
                 Rent (display)
                 <input
+                  id="market-rent-input"
                   type="text"
                   placeholder="KSh 80,000 / month"
                   value={rentDisplay}
@@ -237,6 +285,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
               <label style={labelBase}>
                 Threshold (display)
                 <input
+                  id="market-threshold-input"
                   type="text"
                   placeholder="Income ≥ 3000"
                   value={thresholdDisplay}
@@ -248,6 +297,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
               <label style={labelBase}>
                 City
                 <input
+                  id="market-city-input"
                   type="text"
                   placeholder="Nairobi"
                   value={city}
@@ -257,6 +307,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
               </label>
 
               <button
+                id="market-post-submit"
                 type="submit"
                 style={{
                   display: 'inline-flex',
@@ -282,18 +333,45 @@ export default function LandlordMarket({ walletAddress }: Props) {
 
             {listings.length > 0 && (
               <div style={{ marginTop: 32 }}>
-                <h3
+                <div
                   style={{
-                    fontFamily: FONT,
-                    fontSize: 11,
-                    letterSpacing: '0.2em',
-                    textTransform: 'uppercase',
-                    color: MUTED,
-                    margin: '0 0 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    marginBottom: 14,
                   }}
                 >
-                  Your posted units
-                </h3>
+                  <h3
+                    style={{
+                      fontFamily: FONT,
+                      fontSize: 11,
+                      letterSpacing: '0.2em',
+                      textTransform: 'uppercase',
+                      color: MUTED,
+                      margin: 0,
+                    }}
+                  >
+                    Your posted units
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={onClearPostedUnits}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: MUTED,
+                      fontFamily: FONT,
+                      fontSize: 10,
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Clear all
+                  </button>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {listings.map((l) => (
                     <article
@@ -377,6 +455,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
 
           {/* RIGHT: qualified renters */}
           <div
+            id="market-qualified-renters"
             style={{
               background: BG_CARD,
               backdropFilter: 'blur(20px)',
@@ -392,6 +471,7 @@ export default function LandlordMarket({ walletAddress }: Props) {
                 display: 'flex',
                 alignItems: 'baseline',
                 justifyContent: 'space-between',
+                gap: 16,
                 marginBottom: 20,
               }}
             >
@@ -407,16 +487,45 @@ export default function LandlordMarket({ walletAddress }: Props) {
               >
                 Qualified renters
               </h2>
-              <span
+              <div
                 style={{
-                  fontFamily: FONT,
-                  fontSize: 11,
-                  color: MUTED,
-                  letterSpacing: '0.06em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end',
                 }}
               >
-                {qualifiedRenters.length} on file
-              </span>
+                <span
+                  style={{
+                    fontFamily: FONT,
+                    fontSize: 11,
+                    color: MUTED,
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  {qualifiedRenters.length} on file
+                </span>
+                {qualifiedRenters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onClearQualifiedRenters}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: MUTED,
+                      fontFamily: FONT,
+                      fontSize: 10,
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
             </div>
 
             {qualifiedRenters.length === 0 ? (
@@ -435,8 +544,8 @@ export default function LandlordMarket({ walletAddress }: Props) {
               >
                 No qualifying renters in your ledger yet.
                 <br />
-                Run the verifier flow on a renter address and save the result to
-                start filling this list.
+                Run the verifier flow on a renter address. Qualified checks are
+                saved into this list automatically.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

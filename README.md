@@ -270,6 +270,9 @@ See [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md) for the deployment 
 
 Actual UI screenshots captured from the running app:
 
+**Homepage — landing and entry**
+![ProofPass homepage](docs/readme-screenshots/home.png)
+
 **Role selection — renter vs landlord flow**
 ![ProofPass role selection screen showing separate renter and landlord entry points](docs/readme-screenshots/start.png)
 
@@ -283,7 +286,7 @@ Actual UI screenshots captured from the running app:
 ![ProofPass landlord market page showing unit posting fields and the qualified renters ledger panel](docs/readme-screenshots/market.png)
 
 **Landlord verification portal — yes/no check without raw financial data**
-![ProofPass landlord verification portal for checking a renter's qualification without viewing private finances](frontend/public/images/landlord-verify.jpg)
+![ProofPass landlord verification portal for checking a renter's qualification without viewing private finances](docs/readme-screenshots/verify.png)
 
 ## On-chain proof of execution
 
