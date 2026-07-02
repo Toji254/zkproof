@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "if [ -f frontend/package-lock.json ]; then npm --prefix frontend ci; else npm ci; fi",
+  "buildCommand": "rm -rf dist frontend/dist && if [ -f frontend/package.json ]; then NODE_OPTIONS='--max-old-space-size=2048' npm --prefix frontend run build && cp -R frontend/dist dist; else NODE_OPTIONS='--max-old-space-size=2048' npm run build; fi",
+  "outputDirectory": "dist",
   "framework": "vite",
   "headers": [
     {
