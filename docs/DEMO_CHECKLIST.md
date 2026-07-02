@@ -8,7 +8,7 @@
 - confirm the testnet contract link works
 - confirm the UI matches the README screenshots
 
-## Before live judging
+## Before a live walkthrough
 
 - preload the app in a browser tab
 - keep Stellar Expert open in a second tab
@@ -40,12 +40,12 @@
 - show the live contract on Stellar Expert
 - explain that the wallet is only the signing surface and the proof still originates in-browser
 
-## Final submission checklist
+## Final walkthrough checklist
 
 - [ ] No placeholder links remain
 - [ ] README hero matches landing hero
 - [ ] Live demo works on testnet
 - [ ] Failure case is documented and demoable
-- [ ] Judge quickstart is accurate
+- [ ] Quickstart is accurate
 - [ ] Contract link opens correctly
 - [ ] Screenshots reflect current UI

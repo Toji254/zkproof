@@ -1,4 +1,4 @@
-# Judge Quickstart — ProofPass / Stellar Hacks: Real-World ZK
+# Product Walkthrough — ProofPass
 
 **Time:** 3 minutes. **Goal:** show that the ZK is doing real work, not
 just decorating a UI.
@@ -18,7 +18,7 @@ just decorating a UI.
    only **YES**, the threshold proven, and the expiry date. No amounts,
    no documents, no transaction history.
 
-## 60-second Qualified Renter demo (new for this hackathon)
+## 60-second Qualified Renter walkthrough
 
 1. Open https://zkproof.vercel.app/qualified
 2. The page is pre-loaded with demo values (6 months of stable income,
@@ -33,7 +33,7 @@ just decorating a UI.
 5. Reset and watch the public inputs populate. Those exact bytes are
    what the on-chain verifier would check.
 
-## 60-second Market demo (new for this hackathon)
+## 60-second Market walkthrough
 
 1. Open https://zkproof.vercel.app/market
 2. Post a unit: name = "2BR Westlands", rent = "KSh 80k / month",
@@ -58,7 +58,7 @@ just decorating a UI.
   has no fetch path to the raw numbers — there is no API endpoint that
   returns them.
 
-## What's new in this submission
+## Implementation highlights
 
 | Move              | Where                                    | Why                                       |
 |-------------------|------------------------------------------|-------------------------------------------|
@@ -96,9 +96,9 @@ cargo test --test vk_probe             # 1 VK layout test passes
 cd ../frontend && npm install && NODE_OPTIONS="--max-old-space-size=2048" npm run dev
 ```
 
-## Why this is not just another proof-of-funds demo
+## Why this is more than a proof-of-funds demo
 
-Most competing privacy projects at this hackathon live in one of two lanes:
+Most privacy products in this category live in one of two lanes:
 
 1. **Crypto-native payment/privacy infrastructure** (privacy pools,
    shielded transfers, confidential tokens). These are infrastructure —

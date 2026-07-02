@@ -1,4 +1,4 @@
-# Judge Quickstart
+# Quickstart
 
 ## Open this first
 
@@ -71,10 +71,10 @@ Real screenshots captured from the app live in:
 ## If the prover takes time to load
 
 The proof engine downloads heavy proving assets the first time.
-For live judging:
+For a live walkthrough:
 - load the app once before the demo starts
 - let the proving assets cache
-- do not make the judge wait through a cold first-load if you can avoid it
+- avoid making the viewer wait through a cold first-load if you can avoid it
 
 ## If the verification key needs to be refreshed
 

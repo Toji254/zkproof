@@ -202,7 +202,7 @@ All spec items 1–10 below the "Success criteria" line are satisfied. The front
 - `public/zkproof.json` — copied from `circuits/target/`.
 - `src/lib/config.ts` — reads `VITE_CONTRACT_ID` and `VITE_NETWORK` from `.env`.
 
-**Remaining**: update the on-chain VK with a real one. The contract was deployed with a 1760-byte zero-byte placeholder; the new `prover.ts` exposes `getVerificationKey()` which returns the real one. `scripts/update-vk.sh` already exists; the missing piece is the small CLI helper to dump the VK to a hex file. For a hackathon, the user can hit `getVerificationKey()` in a browser DevTools console and paste the hex into the script.
+**Remaining**: update the on-chain VK with a real one. The contract was deployed with a 1760-byte zero-byte placeholder; the new `prover.ts` exposes `getVerificationKey()` which returns the real one. `scripts/update-vk.sh` already exists; the missing piece is the small CLI helper to dump the VK to a hex file. As a manual fallback, the user can hit `getVerificationKey()` in a browser DevTools console and paste the hex into the script.
 
 **Dev-server OOM note**: this VM has 6.6GB RAM. `bb.js` adds ~285 packages; the first `npm run dev` after install got OOM-killed twice. The fix is `NODE_OPTIONS="--max-old-space-size=2048" npm run dev` — see terminal. Do NOT skip this on a low-RAM machine.
 

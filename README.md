@@ -1,4 +1,4 @@
-# zkProof — ProofPass
+# ProofPass
 
 ![Built with Noir](https://img.shields.io/badge/Built%20with-Noir-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
 ![Deployed on Stellar](https://img.shields.io/badge/Deployed%20on-Stellar-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
@@ -45,11 +45,11 @@ commitment the circuit checks, and shows the public-input payload that the
 on-chain verifier would receive — same shape, same commitment, no chain tx
 required to inspect.
 
-The market view at [`/market`](https://zkproof.vercel.app/market) is the
-product screen judges remember: a landlord posts a unit, sees every renter
-who has already proven qualification for that threshold, and inspects the
-underlying attestation on Stellar Expert — without ever seeing the
-renter's actual numbers.
+The market view at [`/market`](https://zkproof.vercel.app/market) is where the
+product value becomes obvious: a landlord posts a unit, sees every renter who
+has already proven qualification for that threshold, and inspects the
+underlying attestation on Stellar Expert — without ever seeing the renter's
+actual numbers.
 
 ## Why this matters
 
@@ -66,11 +66,12 @@ This is why the product is easy to understand beyond crypto: the verifier gets t
 
 ## Live links
 
-- **Live demo (Vercel):** https://zkproof.vercel.app *(replace with your actual Vercel URL after `vercel --prod`)*
+- **Live app:** https://zkproof.vercel.app
 - **Testnet contract:** https://stellar.expert/explorer/testnet/contract/CDUXLEZQ6ZIQV3LN45VJOK5ONKRQOFFAIEK4JXPD63R2PDC5AF5VNJE3
 - **Happy-path tx:** https://stellar.expert/explorer/testnet/tx/d060c741e461738b4ba59413dbb288aee6d4266f40ca69b05e9c929e51cc4943
 - **Demo video:** *(record per `DEMO_SCRIPT.md`, upload to YouTube, paste the URL here)*
-- **Judge quickstart:** [`docs/JUDGE_QUICKSTART.md`](./docs/JUDGE_QUICKSTART.md)
+- **Quickstart:** [`docs/QUICKSTART.md`](./docs/QUICKSTART.md)
+- **Product walkthrough:** [`docs/PRODUCT_WALKTHROUGH.md`](./docs/PRODUCT_WALKTHROUGH.md)
 - **Deployment proof:** [`docs/DEPLOYMENT_PROOF.md`](./docs/DEPLOYMENT_PROOF.md)
 - **Run locally:** `cd frontend && npm install && NODE_OPTIONS="--max-old-space-size=2048" npm run dev` → http://localhost:3000
 
@@ -128,7 +129,7 @@ Authenticity model:
 
 In short: the generated renter and landlord numbers are public reference IDs that make the handoff cleaner, while the actual proof remains anchored to the renter wallet and Stellar attestation.
 
-## Judge quickstart
+## Quickstart
 
 1. Open the live demo.
 2. Run the renter flow with the sample values.
@@ -137,7 +138,7 @@ In short: the generated renter and landlord numbers are public reference IDs tha
 5. Inspect the contract or transaction on Stellar Expert.
 6. Run the below-threshold failure case.
 
-Full walkthrough: [`docs/JUDGE_QUICKSTART.md`](./docs/JUDGE_QUICKSTART.md)
+Full walkthrough: [`docs/QUICKSTART.md`](./docs/QUICKSTART.md)
 
 ## What the verifier sees
 
@@ -171,7 +172,7 @@ Canonical failure path:
 - threshold = `3000`
 - expected result = proof generation fails or no valid attestation is issued
 
-### Why judges should care about the failure case
+### Why the failure case matters
 
 Without this failure case, the product could be dismissed as a UI wrapper around unverifiable claims.
 The failed proof path shows the zero-knowledge circuit is enforcing the rule itself.
@@ -221,9 +222,8 @@ ZK is load-bearing because it:
 - turns an invasive process into a reusable privacy-preserving attestation
 - creates a product that cannot exist credibly without zero-knowledge proofs
 
-## Submission snapshot
+## Implementation snapshot
 
-- Hackathon: [Stellar Hacks: Real-World ZK](https://dorahacks.io/hackathon/stellar-hacks-zk)
 - Circuit: [`circuits/src/main.nr`](./circuits/src/main.nr)
 - Soroban verifier: [`contracts/src/lib.rs`](./contracts/src/lib.rs)
 - Frontend prover flow: [`frontend/src/lib/prover.ts`](./frontend/src/lib/prover.ts)
@@ -322,9 +322,9 @@ zkproof/
 ├── contracts/                 # Soroban verifier + attestation registry
 ├── frontend/                  # React/Vite UI and client-side proving flow
 ├── scripts/                   # Build, deploy, smoke-test, and VK update scripts
-├── docs/                      # Judge quickstart, deployment proof, positioning
+├── docs/                      # Quickstart, deployment proof, positioning
 ├── DEMO_SCRIPT.md             # Recording script for the demo
-├── README.md                  # Submission-facing overview
+├── README.md                  # Product overview
 └── .contract-id               # Current deployed contract ID
 ```
 

@@ -1,12 +1,12 @@
 # zkProof Project Structure
 
-This is the monorepo for the zkProof hackathon project.
+This is the monorepo for the ProofPass product.
 
 ## Directory Structure
 
 ```
 zkproof/
-├── README.md                    # Main README (hackathon submission)
+├── README.md                    # Main README (product overview)
 ├── circuits/                    # Noir ZK circuits
 │   ├── Nargo.toml              # Noir project config
 │   ├── Prover.toml             # Example prover inputs
