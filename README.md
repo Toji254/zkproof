@@ -2,7 +2,9 @@
 
 > **Portfolio snapshot:** A privacy-preserving rental qualification system using **Noir zero-knowledge proofs + Soroban on Stellar + a browser-side proof flow**.
 >
-> **Core engineering idea:** prove eligibility without exposing the renter's underlying financial data. The repository also includes deployed testnet evidence and recorded failure-path testing.
+> **core engineering idea:** prove eligibility without exposing private financial data. the repo also includes deployed testnet evidence + failure-path testing.
+>
+> **tags:** `bc | zk | noir | soroban | privacy | sc | web3`
 
 
 ![Built with Noir](https://img.shields.io/badge/Built%20with-Noir-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
