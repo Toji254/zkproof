@@ -1,5 +1,10 @@
 # ProofPass
 
+> **Portfolio snapshot:** A privacy-preserving rental qualification system using **Noir zero-knowledge proofs + Soroban on Stellar + a browser-side proof flow**.
+>
+> **Core engineering idea:** prove eligibility without exposing the renter's underlying financial data. The repository also includes deployed testnet evidence and recorded failure-path testing.
+
+
 ![Built with Noir](https://img.shields.io/badge/Built%20with-Noir-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
 ![Deployed on Stellar](https://img.shields.io/badge/Deployed%20on-Stellar-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
 ![License MIT](https://img.shields.io/badge/License-MIT-111827?style=flat-square&labelColor=050a0f&color=00d4aa)
